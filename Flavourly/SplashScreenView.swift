@@ -1,57 +1,77 @@
-//
-//  SplashScreenView.swift
-//  GoViral
-//
-//  Created by Minaxi on 16/08/26.
-//
-
 import SwiftUI
-import Lottie
 
 struct SplashScreenView: View {
-    @EnvironmentObject private var settings: SettingsManager
     @State private var isActive = false
-    @State private var size = 0.8
-    @State private var opacity = 0.5
-    
+    @State private var loadingProgress: CGFloat = 0
+
     var body: some View {
-        
         if isActive {
             RootView()
         } else {
-                VStack {
-                        Text(AppInfo.appName)
-                    }
-                    .padding()
-                    .scaleEffect(size)
-                    .opacity(opacity)
-                    .onAppear {
-                        withAnimation(.easeIn(duration: 1)) {
-                            size = 1.0
-                            opacity = 1.0
+            GeometryReader { geometry in
+                ZStack {
+                    Image("SplashPasta")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .overlay {
+                            LinearGradient(
+                                colors: [.clear, .black.opacity(0.15), .black.opacity(0.78)],
+                                startPoint: .center,
+                                endPoint: .bottom
+                            )
                         }
-                    }
-                    
-                    VStack(spacing: 8) {
-                        Spacer()
-                        
-                        LottieView(animation: .named("Loading"))
-                            .playing(loopMode: .loop)
-                            .frame(maxWidth: .infinity, maxHeight: 30)
-                        
-                        Text(String(localized: "Version \(AppInfo.version)"))
 
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                        withAnimation {
-                            isActive = true
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+
+                        VStack(spacing: 3) {
+                            Text("Welcome to")
+                                .font(.system(size: 17, weight: .medium))
+                            Text("Flavourly")
+                                .font(.custom("Pacifico-Regular", size: 47))
+                                .minimumScaleFactor(0.8)
+                            Text("Recipes. Plans. Groceries.\nA Healthier You.")
+                                .font(.system(size: 16, weight: .medium))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
+                                .padding(.top, 4)
                         }
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.65), radius: 8, y: 3)
+                        .padding(.bottom, geometry.size.height * 0.14)
+
+                        Text("Loading delicious things...")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.bottom, 10)
+
+                        Capsule()
+                            .fill(.white.opacity(0.35))
+                            .frame(width: 150, height: 4)
+                            .overlay(alignment: .leading) {
+                                Capsule()
+                                    .fill(.white)
+                                    .frame(width: 150 * loadingProgress, height: 4)
+                            }
                     }
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+            .background(.black)
+            .ignoresSafeArea()
+            .preferredColorScheme(.dark)
+            .task {
+                withAnimation(.linear(duration: 2.2)) {
+                    loadingProgress = 1
+                }
+                try? await Task.sleep(for: .seconds(2.3))
+                guard !Task.isCancelled else { return }
+                isActive = true
             }
         }
     }
-
-
+}

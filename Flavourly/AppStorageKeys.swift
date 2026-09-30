@@ -10,6 +10,7 @@ import Foundation
 enum AppStorageKeys {
     static let isLoggedIn                  = "isLoggedIn"
     static let hasSeenOnboarding           = "hasSeenOnboarding"
+    static let onboardingPage              = "onboardingPage"
     static let userName                    = "userName"
     static let profileName                 = "profileName"
     static let profileEmail                = "profileEmail"
@@ -25,10 +26,11 @@ enum AppStorageKeys {
 
     // MARK: Customization
     static let hasSeenCustomization        = "hasSeenCustomization"
+    static let customizationPreferences    = "customizationPreferences"
+    static let customizationStep           = "customizationStep"
+    static let homeData                    = "homeData"
     static let selectedAccentColor         = "selectedAccentColor"
     static let selectedTheme               = "selectedTheme"
     static let isPremium                   = "isPremium"
 
 }
-
-

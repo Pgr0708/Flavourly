@@ -6,3 +6,4 @@
 //
 
 let revenueCatAPIKey = "........................"
+let hasRevenueCatAPIKey = revenueCatAPIKey.hasPrefix("appl_") || revenueCatAPIKey.hasPrefix("test_")

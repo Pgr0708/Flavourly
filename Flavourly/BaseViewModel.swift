@@ -14,10 +14,9 @@ internal import Combine
 
 @MainActor
 class BaseViewModel: NSObject, ObservableObject {
-    @EnvironmentObject var settings: SettingsManager
     var isPro: Bool {
-        get { settings.isPremium }
-        set { settings.isPremium = newValue }
+        get { SettingsManager.shared.isPremium }
+        set { SettingsManager.shared.isPremium = newValue }
     }
     @Published var isLoading = false
     @Published var isShowDataTransferSheet = false

@@ -10,7 +10,7 @@ import CoreData
 
 @main
 struct FlavourlyApp: App {
-    @StateObject private var settings = SettingsManager()
+    @StateObject private var settings = SettingsManager.shared
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         WindowGroup {

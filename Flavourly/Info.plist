@@ -3,6 +3,8 @@
 <plist version="1.0">
 <dict>
 	<key>UIAppFonts</key>
-	<array/>
+	<array>
+		<string>Pacifico-Regular.ttf</string>
+	</array>
 </dict>
 </plist>

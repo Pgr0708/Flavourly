@@ -20,9 +20,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         FirebaseApp.configure()
         
-        Purchases.logLevel = .debug
-        Purchases.configure(withAPIKey: revenueCatAPIKey)
-        Purchases.shared.delegate = self
+        if hasRevenueCatAPIKey {
+            Purchases.logLevel = .debug
+            Purchases.configure(withAPIKey: revenueCatAPIKey)
+            Purchases.shared.delegate = self
+            Purchases.shared.getCustomerInfo { customerInfo, _ in
+                guard let customerInfo else { return }
+                BaseViewModel().checkUserIsPro(customerInfo: customerInfo)
+            }
+        }
         
         application.registerForRemoteNotifications()
 

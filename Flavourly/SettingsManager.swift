@@ -8,8 +8,17 @@
 import SwiftUI
 internal import Combine
 
+enum AppFlow {
+    case onboarding
+    case customization
+    case paywall
+    case home
+}
+
 @MainActor
 final class SettingsManager: ObservableObject {
+    static let shared = SettingsManager()
+
     @AppStorage(AppStorageKeys.languageCode)
     var languageCode = Languages.english.shortCode.lowercased() {
         didSet {
@@ -41,6 +50,11 @@ final class SettingsManager: ObservableObject {
         didSet { objectWillChange.send() }
     }
 
+    @AppStorage(AppStorageKeys.onboardingPage)
+    var onboardingPage = 0 {
+        didSet { objectWillChange.send() }
+    }
+
     @AppStorage(AppStorageKeys.hasSeenNotificationPrompt)
     var hasSeenNotificationPrompt = false
     {
@@ -59,6 +73,56 @@ final class SettingsManager: ObservableObject {
         didSet { objectWillChange.send() }
     }
 
+    @AppStorage(AppStorageKeys.userName)
+    var userName = "" {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage(AppStorageKeys.customizationStep)
+    var customizationStep = 0 {
+        didSet { objectWillChange.send() }
+    }
+
+    @AppStorage(AppStorageKeys.customizationPreferences)
+    private var customizationPreferencesData = Data() {
+        didSet { objectWillChange.send() }
+    }
+
+    var customizationPreferences: CustomizationPreferences {
+        get { (try? JSONDecoder().decode(CustomizationPreferences.self, from: customizationPreferencesData)) ?? .init() }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                customizationPreferencesData = data
+            }
+        }
+    }
+
+    @AppStorage(AppStorageKeys.homeData)
+    private var homeDataStorage = Data() {
+        didSet { objectWillChange.send() }
+    }
+
+    var homeData: HomeData {
+        get { (try? JSONDecoder().decode(HomeData.self, from: homeDataStorage)) ?? .init() }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                homeDataStorage = data
+            }
+        }
+    }
+
+    var displayName: String {
+        let name = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Chef" : name
+    }
+
+    var currentFlow: AppFlow {
+        if !hasSeenOnboarding { return .onboarding }
+        if !hasSeenCustomization { return .customization }
+        if !hasSeenPaywall && !isPremium { return .paywall }
+        return .home
+    }
+
     @AppStorage(AppStorageKeys.selectedAccentColor)
     var selectedAccentColor = AppAccentColor.teal.rawValue {
         didSet { objectWillChange.send() }
@@ -70,7 +134,7 @@ final class SettingsManager: ObservableObject {
 
     
     @AppStorage(AppStorageKeys.isPremium)
-    var isPremium = true {
+    var isPremium = false {
         didSet { objectWillChange.send() }
     }
 

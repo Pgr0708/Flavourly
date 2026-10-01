@@ -1,143 +1,81 @@
 //
 //  CoreDataManager.swift
-//  GoViral
+//  Flavourly
 //
-//  Created by Minaxi on 16/08/26.
+//  Local-first storage. Syncs through the user's own iCloud when available,
+//  so there is no login anywhere in the app.
 //
 
-import Foundation
 import CoreData
-import SwiftUI
 
-class CoreDataManager: NSObject {
-    private(set) var nsPersistentContainer: NSPersistentCloudKitContainer!
-    private var hasRetried = false
-    
-        static let shared = CoreDataManager()
-    
-    var context: NSManagedObjectContext {
-        return CoreDataManager.shared.nsPersistentContainer.viewContext
+final class CoreDataManager {
+    static let shared = CoreDataManager()
+    static let cloudContainerID = "iCloud.com.bhavik.Flavourly"
+
+    let container: NSPersistentCloudKitContainer
+    /// False only when the on-disk store could not be opened and we fell back to memory.
+    private(set) var isPersistent = true
+
+    var context: NSManagedObjectContext { container.viewContext }
+
+    private init() {
+        container = NSPersistentCloudKitContainer(name: "Flavourly")
+        // Never delete the user's store on failure — degrade instead:
+        // iCloud sync → local only → in memory (and tell the user).
+        if !load(cloudKit: true), !load(cloudKit: false) {
+            isPersistent = false
+            _ = load(cloudKit: false, inMemory: true)
+        }
+        container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
-    
+
+    func save() {
+        guard context.hasChanges else { return }
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            DropsManager.showError(title: "Couldn't save", subtitle: error.localizedDescription)
+        }
+    }
+
     func delete(_ object: NSManagedObject) {
         context.delete(object)
         save()
     }
-    
-    func fetchObjectById(id: NSManagedObjectID) -> NSManagedObject? {
-        do {
-            return try CoreDataManager.shared.context.existingObject(with: id)
-        } catch {
-            print(error.localizedDescription)
-            return nil
-        }
+
+    func fetch<T: NSManagedObject>(_ type: T.Type, _ predicate: NSPredicate? = nil, sort: [NSSortDescriptor] = [], limit: Int = 0) -> [T] {
+        let request = NSFetchRequest<T>(entityName: String(describing: type))
+        request.predicate = predicate
+        request.sortDescriptors = sort
+        request.fetchLimit = limit
+        return (try? context.fetch(request)) ?? []
     }
-    
-    func save() {
-        guard context.hasChanges else {
-            print("💾 CoreData: No changes to save.")
-            return
-        }
-        do {
-            try context.save()
-            print("💾 CoreData SUCCESS: Saved context changes locally.")
-        } catch {
-            context.rollback()
-            print("💾 CoreData ERROR: Failed to save context: \(error.localizedDescription)")
-        }
+
+    func count<T: NSManagedObject>(_ type: T.Type, _ predicate: NSPredicate? = nil) -> Int {
+        let request = NSFetchRequest<T>(entityName: String(describing: type))
+        request.predicate = predicate
+        return (try? context.count(for: request)) ?? 0
     }
-    
-    private override init() {
-        super.init()
-        
-        // Listen to CloudKit syncing setup, upload, and download event state changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(cloudKitEventChanged(_:)),
-            name: NSPersistentCloudKitContainer.eventChangedNotification,
-            object: nil
-        )
-        
-        setupContainer()
-    }
-    
-    private func setupContainer() {
-        let container = NSPersistentCloudKitContainer(name: "GoViral")
-        let storeDescription = container.persistentStoreDescriptions.first
-        storeDescription?.shouldMigrateStoreAutomatically = true
-        storeDescription?.shouldInferMappingModelAutomatically = true
-        
-        container.loadPersistentStores { [weak self] description, error in
-            guard let self = self else { return }
-            
-            if error != nil {
-//                print("💾 CoreData ERROR: Failed to load CloudKit store...")
-                
-                if !self.hasRetried {
-                    self.hasRetried = true
-                    
-                    // Delete incompatible database files
-                    if let url = storeDescription?.url {
-                        let fileManager = FileManager.default
-//                        print("💾 CoreData: Deleting incompatible database at \(url.path)")
-                        let extensions = ["", "-shm", "-wal"]
-                        let base = url.deletingPathExtension()
-                        for ext in extensions {
-                            let target = base.appendingPathExtension("sqlite\(ext)")
-                            if fileManager.fileExists(atPath: target.path) {
-                                try? fileManager.removeItem(at: target)
-                            }
-                        }
-                    }
-                    
-                    DispatchQueue.main.async { [weak self] in
-                        self?.setupContainer()
-                    }
-                    return
-                }
-                
-//                print("💾 CoreData FALLBACK: Loading local NSPersistentContainer without CloudKit sync...")
-                let localContainer = NSPersistentCloudKitContainer(name: "SubSync")
-                if let localDesc = localContainer.persistentStoreDescriptions.first {
-                    localDesc.cloudKitContainerOptions = nil
-                }
-                localContainer.loadPersistentStores { _, _ in }
-                
-                self.nsPersistentContainer = localContainer
-                localContainer.viewContext.automaticallyMergesChangesFromParent = true
-                localContainer.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
-                return
-            }
-            
-            // Success – assign only on clean load
-            self.nsPersistentContainer = container
-            container.viewContext.automaticallyMergesChangesFromParent = true
-            container.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
-            print("💾 CoreData SUCCESS: Database loaded successfully.")
-            
+
+    private func load(cloudKit: Bool, inMemory: Bool = false) -> Bool {
+        let description = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
+        if inMemory { description.url = URL(fileURLWithPath: "/dev/null") }
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
+        description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+        description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+        description.cloudKitContainerOptions = cloudKit
+            ? NSPersistentCloudKitContainerOptions(containerIdentifier: Self.cloudContainerID)
+            : nil
+        container.persistentStoreDescriptions = [description]
+
+        var failure: Error?
+        container.loadPersistentStores { _, error in failure = error }
+        if let failure {
+            print("Core Data store failed to load (cloudKit: \(cloudKit), inMemory: \(inMemory)): \(failure)")
         }
-    }
-    
-    @objc private func cloudKitEventChanged(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              userInfo[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] is NSPersistentCloudKitContainer.Event else {
-            return
-        }
-        
-//        let typeStr: String
-//        switch event.type {
-//        case .setup: typeStr = "Setup"
-//        case .import: typeStr = "Import (Download from iCloud)"
-//        case .export: typeStr = "Export (Upload to iCloud)"
-//        @unknown default: typeStr = "Unknown"
-//        }
-//
-//        if event.succeeded {
-//            print("☁️ iCloud CloudKit SUCCESS: \(typeStr) completed successfully.")
-//        } else if let error = event.error {
-//            print("☁️ iCloud CloudKit ERROR: \(typeStr) failed: \(error.localizedDescription)")
-//        } else {
-//            print("☁️ iCloud CloudKit ACTIVE: \(typeStr) is in progress...")
-//        }
+        return failure == nil
     }
 }

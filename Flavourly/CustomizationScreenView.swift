@@ -1,6 +1,7 @@
 import SwiftUI
 
-private struct PersonalizationQuestion {
+/// Shared with Preferences so every quiz answer stays editable later.
+struct PersonalizationQuestion {
     let id: String
     let title: String
     let subtitle: String
@@ -17,13 +18,13 @@ struct CustomizationScreenView: View {
     private let green = Color(hex: "#155634")
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
-    private static let questions: [PersonalizationQuestion] = [
+    static let questions: [PersonalizationQuestion] = [
         .init(id: "name", title: "What should we call you?", subtitle: "Let's make your kitchen feel like yours.", options: [], symbol: "person.fill", multiple: false),
         .init(id: "goals", title: "What are your goals?", subtitle: "Choose everything you'd like Flavourly to remember.", options: ["Eat healthier", "Lose weight", "Gain muscle", "Save time", "Cook better", "Manage family meals"], symbol: "heart.fill", multiple: true),
-        .init(id: "diet", title: "Any dietary preferences?", subtitle: "Select all that apply to your meals.", options: ["No preference", "Vegetarian", "Vegan", "Pescatarian", "Keto", "Low carb", "Gluten free", "Dairy free"], symbol: "leaf.fill", multiple: true, grid: true, exclusive: "No preference"),
+        .init(id: "diet", title: "Any dietary preferences?", subtitle: "Select all that apply to your meals.", options: ["No preference", "Vegetarian", "Eggetarian", "Vegan", "Pescatarian", "Jain", "No onion / garlic", "Halal", "Keto", "Low carb", "Gluten free", "Dairy free"], symbol: "leaf.fill", multiple: true, grid: true, exclusive: "No preference"),
         .init(id: "allergies", title: "What must we avoid?", subtitle: "Allergies are hard constraints. Include every ingredient that must stay out.", options: ["None known", "Wheat", "Gluten", "Peanuts", "Tree nuts", "Milk", "Eggs", "Soy", "Fish", "Shellfish", "Sesame", "Other"], symbol: "cross.case.fill", multiple: true, grid: true, exclusive: "None known"),
         .init(id: "dislikes", title: "Any foods you dislike?", subtitle: "We'll remember ingredients and flavours you would rather skip.", options: [], symbol: "hand.thumbsdown.fill", multiple: true),
-        .init(id: "cuisines", title: "Which cuisines excite you?", subtitle: "Pick a few favourites. You can explore others later.", options: ["Any cuisine", "Italian", "Indian", "Mediterranean", "Mexican", "Japanese", "Chinese", "Thai", "Middle Eastern", "American", "French", "Korean"], symbol: "fork.knife", multiple: true, grid: true, exclusive: "Any cuisine"),
+        .init(id: "cuisines", title: "Which cuisines excite you?", subtitle: "Pick a few favourites. You can explore others later.", options: ["Any cuisine", "Italian", "Indian", "Mediterranean", "Mexican", "Japanese", "Chinese", "Thai", "Middle Eastern", "American", "French", "Korean", "Spanish", "Greek", "Turkish", "Vietnamese", "Caribbean", "African", "Latin American", "British"], symbol: "fork.knife", multiple: true, grid: true, exclusive: "Any cuisine"),
         .init(id: "maxTime", title: "How much time can you cook?", subtitle: "Choose your maximum time for a typical meal.", options: ["15 minutes", "30 minutes", "45 minutes", "60 minutes", "No limit"], symbol: "clock.fill", multiple: false, grid: true),
         .init(id: "skill", title: "How confident are you cooking?", subtitle: "We'll match the level of guidance to you.", options: ["Just starting", "Comfortable with basics", "Confident home cook", "Very experienced"], symbol: "flame.fill", multiple: false),
         .init(id: "frequency", title: "How often do you want to cook?", subtitle: "Your plan should fit your real week.", options: ["Daily", "4–5 times a week", "2–3 times a week", "Once a week", "Mostly meal prep"], symbol: "calendar", multiple: false),
@@ -34,7 +35,7 @@ struct CustomizationScreenView: View {
         .init(id: "recipeControls", title: "How do you like to adapt recipes?", subtitle: "Tell us what you expect to control.", options: ["Scale servings", "Remove ingredients", "Swap ingredients", "Lock favourite meals"], symbol: "slider.horizontal.3", multiple: true),
         .init(id: "nutrition", title: "Do you have nutrition targets?", subtitle: "Optional daily goals. Leave blank if you prefer a flexible plan.", options: [], symbol: "chart.bar.fill", multiple: true),
         .init(id: "discovery", title: "Nothing saved yet?", subtitle: "Choose how you'd like to discover your first recipes.", options: ["Browse curated recipes", "Suggest from my tastes", "Use what is in my pantry", "Surprise me"], symbol: "sparkles", multiple: false),
-        .init(id: "tracking", title: "What would you like to track?", subtitle: "Choose what matters to you. Apple Health connection will be added later.", options: ["Meals", "Calories and macros", "Cooking progress", "Apple Health when available"], symbol: "heart.text.square.fill", multiple: true)
+        .init(id: "tracking", title: "What would you like to track?", subtitle: "Choose what matters to you. You can connect Apple Health any time.", options: ["Meals", "Calories and macros", "Cooking progress", "Apple Health"], symbol: "heart.text.square.fill", multiple: true)
     ]
 
     private var step: Int { settings.customizationStep }

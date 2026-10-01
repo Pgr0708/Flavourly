@@ -13,10 +13,40 @@
 		58D6005D306D13DF00D0BB3B /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 58E8F28230318A5900395271 /* FirebaseMessaging */; };
 		58D6005E306D13DF00D0BB3B /* Drops in Frameworks */ = {isa = PBXBuildFile; productRef = 58E8F28D30318A7700395271 /* Drops */; };
 		58D6005F306D13DF00D0BB3B /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 58E8F8133031951800395271 /* Lottie */; };
+		62B2BEBAFA01BD95A6C9F946 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB71E47E68D74A93BAD4E493 /* ShareViewController.swift */; };
+		B3D0BAD06400A680395FBBD0 /* FlavourlyShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CCB1BE64664EA6DC3D023805 /* FlavourlyShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		9B83E42194ED66F2576B8E60 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 58D6FDEB306D10ED00D0BB3B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F1B73305E6F7605BE63FB885;
+			remoteInfo = FlavourlyShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		83CB4D97191F916190EA9907 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B3D0BAD06400A680395FBBD0 /* FlavourlyShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		148149571CE8F7EA92870807 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		58D6FDF3306D10ED00D0BB3B /* Flavourly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flavourly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		78485A8F0B43B66C0C31CD08 /* FlavourlyShare.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = FlavourlyShare.entitlements; sourceTree = "<group>"; };
+		CCB1BE64664EA6DC3D023805 /* FlavourlyShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlavourlyShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		EB71E47E68D74A93BAD4E493 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,6 +71,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		560B9099B2612E27EC167870 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		58D6FDF0306D10ED00D0BB3B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -62,6 +99,7 @@
 			children = (
 				58D6FDF5306D10ED00D0BB3B /* Flavourly */,
 				58D6FDF4306D10ED00D0BB3B /* Products */,
+				EFC9C37BCF9F5B2611F4E26D /* FlavourlyShare */,
 			);
 			sourceTree = "<group>";
 		};
@@ -69,8 +107,19 @@
 			isa = PBXGroup;
 			children = (
 				58D6FDF3306D10ED00D0BB3B /* Flavourly.app */,
+				CCB1BE64664EA6DC3D023805 /* FlavourlyShare.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		EFC9C37BCF9F5B2611F4E26D /* FlavourlyShare */ = {
+			isa = PBXGroup;
+			children = (
+				EB71E47E68D74A93BAD4E493 /* ShareViewController.swift */,
+				148149571CE8F7EA92870807 /* Info.plist */,
+				78485A8F0B43B66C0C31CD08 /* FlavourlyShare.entitlements */,
+			);
+			path = FlavourlyShare;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -83,10 +132,12 @@
 				58D6FDEF306D10ED00D0BB3B /* Sources */,
 				58D6FDF0306D10ED00D0BB3B /* Frameworks */,
 				58D6FDF1306D10ED00D0BB3B /* Resources */,
+				83CB4D97191F916190EA9907 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				40040E85D16C3D1BFCF76F96 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				58D6FDF5306D10ED00D0BB3B /* Flavourly */,
@@ -103,6 +154,23 @@
 			productName = Flavourly;
 			productReference = 58D6FDF3306D10ED00D0BB3B /* Flavourly.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F1B73305E6F7605BE63FB885 /* FlavourlyShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A826511A22207210FC8F36E4 /* Build configuration list for PBXNativeTarget "FlavourlyShare" */;
+			buildPhases = (
+				BD4943472A20A89947C08AA5 /* Sources */,
+				560B9099B2612E27EC167870 /* Frameworks */,
+				C90E95BA13D1EF6EF08F3F06 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FlavourlyShare;
+			productName = FlavourlyShare;
+			productReference = CCB1BE64664EA6DC3D023805 /* FlavourlyShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -154,12 +222,20 @@
 			projectRoot = "";
 			targets = (
 				58D6FDF2306D10ED00D0BB3B /* Flavourly */,
+				F1B73305E6F7605BE63FB885 /* FlavourlyShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		58D6FDF1306D10ED00D0BB3B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C90E95BA13D1EF6EF08F3F06 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -176,9 +252,57 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BD4943472A20A89947C08AA5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				62B2BEBAFA01BD95A6C9F946 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		40040E85D16C3D1BFCF76F96 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = FlavourlyShare;
+			target = F1B73305E6F7605BE63FB885 /* FlavourlyShare */;
+			targetProxy = 9B83E42194ED66F2576B8E60 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		03D77C76D1ACE5F58BE164D0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = FlavourlyShare/FlavourlyShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QH39X8R3UD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FlavourlyShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Flavourly;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bhavik.Flavourly.FlavourlyShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		58D6FDFC306D10F700D0BB3B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -374,6 +498,36 @@
 			};
 			name = Release;
 		};
+		8062BD90800B3F3E952B8160 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = FlavourlyShare/FlavourlyShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QH39X8R3UD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FlavourlyShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Flavourly;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bhavik.Flavourly.FlavourlyShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -391,6 +545,15 @@
 			buildConfigurations = (
 				58D6FDFF306D10F700D0BB3B /* Debug */,
 				58D6FE00306D10F700D0BB3B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A826511A22207210FC8F36E4 /* Build configuration list for PBXNativeTarget "FlavourlyShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				03D77C76D1ACE5F58BE164D0 /* Release */,
+				8062BD90800B3F3E952B8160 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

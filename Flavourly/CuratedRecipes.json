@@ -1,0 +1,426 @@
+[
+  {
+    "remoteID": "creamy-garlic-pasta",
+    "title": "Creamy Garlic Pasta",
+    "summary": "Silky garlic cream, burst cherry tomatoes and fresh basil — a 25-minute weeknight favourite.",
+    "imageName": "RecipeCreamyPasta",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 20, "totalMinutes": 25,
+    "cuisine": "Italian", "mealTypes": ["dinner"], "tags": ["Pasta", "Weeknight", "Kid-friendly"],
+    "ingredients": [
+      {"text": "320 g fettuccine"}, {"text": "2 tbsp olive oil"}, {"text": "4 cloves garlic, minced"},
+      {"text": "150 g cherry tomatoes, halved"}, {"text": "200 ml heavy cream"}, {"text": "40 g parmesan, grated"},
+      {"text": "1 handful fresh basil"}, {"text": "Salt to taste"}, {"text": "Black pepper to taste"}
+    ],
+    "steps": [
+      {"text": "Boil the fettuccine in well-salted water for 10 minutes until al dente. Keep a mug of pasta water, then drain."},
+      {"text": "Warm the olive oil over medium heat. Add the garlic and stir for 30 seconds until fragrant — don't let it brown."},
+      {"text": "Add the cherry tomatoes and cook for 3 minutes until they start to burst."},
+      {"text": "Pour in the cream and simmer gently for 2 minutes."},
+      {"text": "Toss in the pasta and parmesan, loosening with a splash of pasta water until glossy."},
+      {"text": "Tear over the basil, season with salt and pepper, and serve straight away."}
+    ],
+    "nutrition": {"calories": 523, "protein": 18, "carbs": 64, "fat": 22, "fiber": 4, "sugar": 6, "sodium": 480, "matched": 9, "total": 9, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "chicken-avocado-quinoa-bowl",
+    "title": "Chicken Avocado Quinoa Bowl",
+    "summary": "Smoky chicken, lemony quinoa, avocado and spinach. High protein and ready in 20 minutes.",
+    "imageName": "RecipeQuinoaBowl",
+    "servings": 2, "prepMinutes": 5, "cookMinutes": 15, "totalMinutes": 20,
+    "cuisine": "Mediterranean", "mealTypes": ["lunch", "dinner"], "tags": ["High protein", "Bowl", "Meal prep"],
+    "ingredients": [
+      {"text": "100 g quinoa, rinsed"}, {"text": "200 g chicken breast"}, {"text": "1 tsp smoked paprika"},
+      {"text": "1 tbsp olive oil"}, {"text": "1 avocado, sliced"}, {"text": "60 g baby spinach"},
+      {"text": "150 g cherry tomatoes, halved"}, {"text": "1 lemon, juiced"}, {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Simmer the quinoa in 250 ml salted water for 12 minutes, then cover and rest."},
+      {"text": "Rub the chicken with paprika, salt and half the oil. Cook in a hot pan for 5 minutes on each side."},
+      {"text": "Rest the chicken for 3 minutes, then slice."},
+      {"text": "Fluff the quinoa with the lemon juice and remaining oil."},
+      {"text": "Build bowls with spinach, quinoa, chicken, avocado and tomatoes."}
+    ],
+    "nutrition": {"calories": 554, "protein": 41, "carbs": 44, "fat": 22, "fiber": 9, "sugar": 4, "sodium": 390, "matched": 9, "total": 9, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "tomato-basil-penne",
+    "title": "Tomato Basil Penne",
+    "summary": "Fresh tomato sauce with garlic and basil. Mild enough for kids — add chilli at the table.",
+    "imageName": "RecipeTomatoPasta",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 20, "totalMinutes": 25,
+    "cuisine": "Italian", "mealTypes": ["dinner", "lunch"], "tags": ["Pasta", "Vegetarian", "Kid-friendly"],
+    "ingredients": [
+      {"text": "350 g penne"}, {"text": "3 tbsp olive oil"}, {"text": "3 cloves garlic, sliced"},
+      {"text": "6 ripe tomatoes, chopped"}, {"text": "1 tsp sugar"}, {"text": "1 handful fresh basil"},
+      {"text": "30 g parmesan, grated (optional)"}, {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Cook the penne in salted water for 11 minutes, then drain, keeping a little water."},
+      {"text": "Fry the garlic in the olive oil for 1 minute."},
+      {"text": "Add the tomatoes, sugar and a pinch of salt. Simmer for 12 minutes until saucy."},
+      {"text": "Stir in the pasta and basil, adding pasta water if needed."},
+      {"text": "Serve with parmesan if you like."}
+    ],
+    "nutrition": {"calories": 452, "protein": 14, "carbs": 72, "fat": 12, "fiber": 6, "sugar": 9, "sodium": 310, "matched": 8, "total": 8, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "lemon-herb-salmon",
+    "title": "Lemon Herb Salmon",
+    "summary": "Oven-baked salmon with garlic, lemon and oregano on crisp broccoli.",
+    "imageName": "RecipeSalmon",
+    "servings": 2, "prepMinutes": 5, "cookMinutes": 20, "totalMinutes": 25,
+    "cuisine": "Mediterranean", "mealTypes": ["dinner"], "tags": ["High protein", "One-pan", "Gluten free"],
+    "ingredients": [
+      {"text": "2 salmon fillets (about 300 g)"}, {"text": "1 head broccoli, cut into florets"}, {"text": "1 lemon"},
+      {"text": "2 cloves garlic, minced"}, {"text": "1 tbsp olive oil"}, {"text": "1 tsp dried oregano"},
+      {"text": "Salt to taste"}, {"text": "Black pepper to taste"}
+    ],
+    "steps": [
+      {"text": "Heat the oven to 200°C. Toss the broccoli with half the oil and salt on a tray and roast for 8 minutes."},
+      {"text": "Mix the garlic, oregano, lemon zest and remaining oil. Spread over the salmon."},
+      {"text": "Add the salmon to the tray and roast for 12 minutes until it flakes."},
+      {"text": "Squeeze over lemon juice and serve."}
+    ],
+    "nutrition": {"calories": 520, "protein": 42, "carbs": 14, "fat": 32, "fiber": 6, "sugar": 4, "sodium": 330, "matched": 8, "total": 8, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "berry-ricotta-pancakes",
+    "title": "Berry Ricotta Pancakes",
+    "summary": "Fluffy ricotta pancakes with warm berries — a slow weekend breakfast.",
+    "imageName": "RecipePancakes",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 15, "totalMinutes": 20,
+    "cuisine": "American", "mealTypes": ["breakfast"], "tags": ["Breakfast", "Weekend", "Vegetarian"],
+    "ingredients": [
+      {"text": "150 g plain flour"}, {"text": "1 tsp baking powder"}, {"text": "2 eggs"}, {"text": "250 g ricotta"},
+      {"text": "150 ml milk"}, {"text": "1 tbsp sugar"}, {"text": "1 tbsp butter"}, {"text": "150 g mixed berries"},
+      {"text": "Maple syrup, to serve"}
+    ],
+    "steps": [
+      {"text": "Whisk the flour, baking powder and sugar in a bowl."},
+      {"text": "Beat in the eggs, ricotta and milk until just combined."},
+      {"text": "Melt a little butter in a pan and cook ladlefuls for 2 minutes on each side."},
+      {"text": "Warm the berries in the pan for 1 minute and spoon over with maple syrup."}
+    ],
+    "nutrition": {"calories": 382, "protein": 16, "carbs": 46, "fat": 15, "fiber": 3, "sugar": 14, "sodium": 290, "matched": 9, "total": 9, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "caprese-pasta-salad",
+    "title": "Caprese Pasta Salad",
+    "summary": "Tomatoes, mozzarella and basil with fusilli — lunchbox friendly.",
+    "imageName": "RecipeSalad",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 10, "totalMinutes": 15,
+    "cuisine": "Italian", "mealTypes": ["lunch"], "tags": ["Salad", "Vegetarian", "Meal prep"],
+    "ingredients": [
+      {"text": "250 g fusilli"}, {"text": "250 g cherry tomatoes, halved"}, {"text": "125 g mozzarella pearls"},
+      {"text": "1 handful fresh basil"}, {"text": "3 tbsp olive oil"}, {"text": "1 tbsp balsamic vinegar"},
+      {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Cook the fusilli for 10 minutes, drain and rinse under cold water."},
+      {"text": "Whisk the olive oil, balsamic and a pinch of salt."},
+      {"text": "Toss the pasta with tomatoes, mozzarella, basil and dressing."}
+    ],
+    "nutrition": {"calories": 418, "protein": 15, "carbs": 49, "fat": 18, "fiber": 3, "sugar": 5, "sodium": 260, "matched": 7, "total": 7, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "harissa-salmon-skillet",
+    "title": "Harissa Salmon Skillet",
+    "summary": "Salmon, chickpeas and courgette in one pan with warming harissa.",
+    "imageName": "RecipeSkillet",
+    "servings": 2, "prepMinutes": 5, "cookMinutes": 20, "totalMinutes": 25,
+    "cuisine": "Middle Eastern", "mealTypes": ["dinner"], "tags": ["One-pan", "High protein"],
+    "ingredients": [
+      {"text": "2 salmon fillets (about 300 g)"}, {"text": "2 tbsp harissa paste"}, {"text": "1 red onion, sliced"},
+      {"text": "1 courgette, sliced"}, {"text": "200 g cherry tomatoes"}, {"text": "1 (400 g) can chickpeas, drained"},
+      {"text": "1 tbsp olive oil"}, {"text": "1 lemon"}, {"text": "1 handful parsley"}
+    ],
+    "steps": [
+      {"text": "Soften the onion and courgette in the oil for 5 minutes."},
+      {"text": "Stir in the chickpeas, tomatoes and half the harissa. Cook for 4 minutes."},
+      {"text": "Brush the salmon with the rest of the harissa, nestle into the pan, cover and cook for 10 minutes."},
+      {"text": "Finish with lemon and parsley."}
+    ],
+    "nutrition": {"calories": 610, "protein": 44, "carbs": 38, "fat": 30, "fiber": 11, "sugar": 9, "sodium": 520, "matched": 9, "total": 9, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "pesto-farfalle",
+    "title": "Pesto Farfalle with Burst Tomatoes",
+    "summary": "Basil pesto, blistered tomatoes and toasted pine nuts.",
+    "imageName": "RecipePesto",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 15, "totalMinutes": 20,
+    "cuisine": "Italian", "mealTypes": ["dinner", "lunch"], "tags": ["Pasta", "Vegetarian", "Quick"],
+    "ingredients": [
+      {"text": "350 g farfalle"}, {"text": "150 g basil pesto"}, {"text": "200 g cherry tomatoes"},
+      {"text": "40 g parmesan, grated"}, {"text": "30 g pine nuts, toasted"}, {"text": "1 tbsp olive oil"}
+    ],
+    "steps": [
+      {"text": "Cook the farfalle for 11 minutes and drain, keeping a splash of water."},
+      {"text": "Blister the tomatoes in the olive oil for 4 minutes."},
+      {"text": "Toss the pasta with pesto, tomatoes and a little pasta water."},
+      {"text": "Top with parmesan and pine nuts."}
+    ],
+    "nutrition": {"calories": 588, "protein": 19, "carbs": 68, "fat": 27, "fiber": 5, "sugar": 5, "sodium": 410, "matched": 6, "total": 6, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "harvest-chicken-salad",
+    "title": "Harvest Chicken Salad",
+    "summary": "Crunchy leaves, quinoa, avocado and chicken with a lemon dressing.",
+    "imageName": "RecipeChickenBowl",
+    "servings": 2, "prepMinutes": 15, "cookMinutes": 0, "totalMinutes": 15,
+    "cuisine": "Mediterranean", "mealTypes": ["lunch"], "tags": ["Salad", "High protein", "Quick"],
+    "ingredients": [
+      {"text": "200 g cooked chicken, sliced"}, {"text": "100 g mixed salad leaves"}, {"text": "1 avocado, sliced"},
+      {"text": "100 g cooked quinoa"}, {"text": "150 g cherry tomatoes"}, {"text": "1 carrot, grated"},
+      {"text": "2 tbsp olive oil"}, {"text": "1 lemon, juiced"}
+    ],
+    "steps": [
+      {"text": "Whisk the olive oil and lemon juice with a pinch of salt."},
+      {"text": "Toss the leaves, quinoa, carrot and tomatoes with half the dressing."},
+      {"text": "Top with chicken and avocado and drizzle over the rest."}
+    ],
+    "nutrition": {"calories": 432, "protein": 31, "carbs": 22, "fat": 25, "fiber": 9, "sugar": 5, "sodium": 280, "matched": 8, "total": 8, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "rustic-tomato-pappardelle",
+    "title": "Rustic Tomato Pappardelle",
+    "summary": "Wide ribbons of pasta in a slow-cooked tomato and garlic sauce.",
+    "imageName": "RecipePanPasta",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 25, "totalMinutes": 30,
+    "cuisine": "Italian", "mealTypes": ["dinner"], "tags": ["Pasta", "Vegetarian"],
+    "ingredients": [
+      {"text": "350 g pappardelle"}, {"text": "2 tbsp olive oil"}, {"text": "1 onion, finely chopped"},
+      {"text": "3 cloves garlic, minced"}, {"text": "400 g passata"}, {"text": "1 handful fresh basil"},
+      {"text": "30 g parmesan, grated"}
+    ],
+    "steps": [
+      {"text": "Soften the onion in the oil for 6 minutes, then add the garlic for 1 minute."},
+      {"text": "Pour in the passata and simmer for 15 minutes."},
+      {"text": "Cook the pappardelle for 8 minutes and toss through the sauce."},
+      {"text": "Finish with basil and parmesan."}
+    ],
+    "nutrition": {"calories": 478, "protein": 16, "carbs": 78, "fat": 11, "fiber": 6, "sugar": 10, "sodium": 350, "matched": 7, "total": 7, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "palak-paneer",
+    "title": "Palak Paneer",
+    "summary": "Soft paneer in a bright, gently spiced spinach gravy.",
+    "servings": 4, "prepMinutes": 10, "cookMinutes": 20, "totalMinutes": 30,
+    "cuisine": "Indian", "mealTypes": ["dinner", "lunch"], "tags": ["Vegetarian", "Indian", "High protein"],
+    "ingredients": [
+      {"text": "400 g spinach"}, {"text": "250 g paneer, cubed"}, {"text": "1 onion, chopped"}, {"text": "2 tomatoes, chopped"},
+      {"text": "3 cloves garlic"}, {"text": "1 inch ginger"}, {"text": "1 green chilli"}, {"text": "1 tsp cumin seeds"},
+      {"text": "1 tsp garam masala"}, {"text": "1/2 tsp turmeric"}, {"text": "2 tbsp cream"}, {"text": "2 tbsp ghee"},
+      {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Blanch the spinach for 2 minutes, cool in iced water and blend with the chilli into a smooth puree."},
+      {"text": "Heat the ghee, crackle the cumin seeds for 30 seconds, then cook the onion for 5 minutes."},
+      {"text": "Add the garlic, ginger and turmeric for 1 minute, then the tomatoes for 4 minutes."},
+      {"text": "Stir in the spinach puree and garam masala and simmer for 5 minutes."},
+      {"text": "Fold in the paneer and cream, warm through for 2 minutes and season."}
+    ],
+    "nutrition": {"calories": 338, "protein": 17, "carbs": 12, "fat": 25, "fiber": 4, "sugar": 5, "sodium": 420, "matched": 13, "total": 13, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "chana-masala",
+    "title": "Chana Masala",
+    "summary": "Tangy, warming chickpea curry — freezes beautifully.",
+    "servings": 4, "prepMinutes": 10, "cookMinutes": 25, "totalMinutes": 35,
+    "cuisine": "Indian", "mealTypes": ["dinner", "lunch"], "tags": ["Vegan", "Indian", "Meal prep"],
+    "ingredients": [
+      {"text": "2 (400 g) cans chickpeas, drained"}, {"text": "1 onion, finely chopped"}, {"text": "2 tomatoes, chopped"},
+      {"text": "3 cloves garlic, minced"}, {"text": "1 inch ginger, grated"}, {"text": "1 green chilli"},
+      {"text": "1 tsp cumin seeds"}, {"text": "2 tsp chana masala"}, {"text": "1/2 tsp turmeric"},
+      {"text": "1 tsp coriander powder"}, {"text": "2 tbsp oil"}, {"text": "1 handful coriander leaves"}
+    ],
+    "steps": [
+      {"text": "Crackle the cumin seeds in hot oil for 30 seconds, then cook the onion for 8 minutes until golden."},
+      {"text": "Add the garlic, ginger and chilli for 1 minute, then the spices for 30 seconds."},
+      {"text": "Add the tomatoes and cook for 5 minutes until they break down."},
+      {"text": "Add the chickpeas and 250 ml water and simmer for 10 minutes, mashing a few chickpeas."},
+      {"text": "Finish with coriander leaves."}
+    ],
+    "nutrition": {"calories": 312, "protein": 12, "carbs": 40, "fat": 11, "fiber": 11, "sugar": 7, "sodium": 460, "matched": 12, "total": 12, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "masala-oats",
+    "title": "Masala Oats",
+    "summary": "Savoury oats with vegetables and gentle spice — ready in 15 minutes.",
+    "servings": 2, "prepMinutes": 5, "cookMinutes": 10, "totalMinutes": 15,
+    "cuisine": "Indian", "mealTypes": ["breakfast"], "tags": ["Breakfast", "Vegan", "Quick"],
+    "ingredients": [
+      {"text": "1 cup rolled oats"}, {"text": "1 onion, finely chopped"}, {"text": "1 tomato, chopped"},
+      {"text": "1 carrot, finely chopped"}, {"text": "1/2 cup peas"}, {"text": "1/2 tsp mustard seeds"},
+      {"text": "1/4 tsp turmeric"}, {"text": "1/2 tsp garam masala"}, {"text": "1 tbsp oil"}, {"text": "2 cups water"},
+      {"text": "1 handful coriander leaves"}
+    ],
+    "steps": [
+      {"text": "Pop the mustard seeds in hot oil for 30 seconds, then cook the onion for 3 minutes."},
+      {"text": "Add the carrot, peas, tomato and spices and cook for 3 minutes."},
+      {"text": "Stir in the oats and water and simmer for 4 minutes until creamy."},
+      {"text": "Top with coriander."}
+    ],
+    "nutrition": {"calories": 262, "protein": 9, "carbs": 40, "fat": 8, "fiber": 8, "sugar": 7, "sodium": 190, "matched": 11, "total": 11, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "vegetable-poha",
+    "title": "Vegetable Poha",
+    "summary": "Light flattened-rice breakfast with peas, potato and lemon.",
+    "servings": 2, "prepMinutes": 10, "cookMinutes": 10, "totalMinutes": 20,
+    "cuisine": "Indian", "mealTypes": ["breakfast"], "tags": ["Breakfast", "Vegan", "Indian"],
+    "ingredients": [
+      {"text": "2 cups poha"}, {"text": "1 onion, chopped"}, {"text": "1 small potato, finely diced"}, {"text": "1/2 cup peas"},
+      {"text": "1 green chilli, chopped"}, {"text": "1/2 tsp mustard seeds"}, {"text": "8 curry leaves"},
+      {"text": "1/4 tsp turmeric"}, {"text": "1 tbsp roasted peanuts (optional)"}, {"text": "1 tbsp oil"},
+      {"text": "1/2 lemon"}, {"text": "1 handful coriander leaves"}
+    ],
+    "steps": [
+      {"text": "Rinse the poha in a sieve and leave to soften for 5 minutes."},
+      {"text": "Pop the mustard seeds and curry leaves in hot oil for 30 seconds."},
+      {"text": "Cook the onion, potato and chilli for 5 minutes, then add the peas and turmeric."},
+      {"text": "Fold in the poha and warm through for 2 minutes."},
+      {"text": "Finish with lemon, coriander and peanuts if you eat them."}
+    ],
+    "nutrition": {"calories": 291, "protein": 7, "carbs": 50, "fat": 7, "fiber": 4, "sugar": 4, "sodium": 170, "matched": 12, "total": 12, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "moong-dal-cheela",
+    "title": "Moong Dal Cheela",
+    "summary": "Protein-rich lentil pancakes with ginger and onion.",
+    "servings": 2, "prepMinutes": 10, "cookMinutes": 15, "totalMinutes": 25,
+    "cuisine": "Indian", "mealTypes": ["breakfast"], "tags": ["Breakfast", "Vegan", "High protein"],
+    "ingredients": [
+      {"text": "1 cup yellow moong dal, soaked for 4 hours"}, {"text": "1 inch ginger"}, {"text": "1 green chilli"},
+      {"text": "1/4 tsp turmeric"}, {"text": "1/2 tsp cumin seeds"}, {"text": "1 onion, finely chopped"},
+      {"text": "1 handful coriander leaves"}, {"text": "2 tsp oil"}, {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Blend the soaked dal with the ginger, chilli and a little water into a smooth batter."},
+      {"text": "Stir in the turmeric, cumin, onion, coriander and salt."},
+      {"text": "Spread a ladleful on a hot greased pan and cook for 2 minutes on each side."}
+    ],
+    "nutrition": {"calories": 248, "protein": 15, "carbs": 36, "fat": 5, "fiber": 9, "sugar": 3, "sodium": 220, "matched": 9, "total": 9, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "paneer-tikka-wrap",
+    "title": "Paneer Tikka Wrap",
+    "summary": "Charred yoghurt-marinated paneer and peppers in a warm wrap.",
+    "servings": 2, "prepMinutes": 10, "cookMinutes": 15, "totalMinutes": 25,
+    "cuisine": "Indian", "mealTypes": ["lunch"], "tags": ["Vegetarian", "Indian", "High protein"],
+    "ingredients": [
+      {"text": "200 g paneer, cubed"}, {"text": "3 tbsp Greek yoghurt"}, {"text": "1 tsp tikka masala"},
+      {"text": "1/2 tsp chilli powder"}, {"text": "1 bell pepper, sliced"}, {"text": "1/2 red onion, sliced"},
+      {"text": "2 wholewheat wraps"}, {"text": "1 handful lettuce"}, {"text": "1 tbsp oil"}
+    ],
+    "steps": [
+      {"text": "Mix the yoghurt, tikka masala and chilli powder and coat the paneer. Leave for 10 minutes."},
+      {"text": "Char the paneer, pepper and onion in the hot oil for 6 minutes."},
+      {"text": "Warm the wraps for 30 seconds each."},
+      {"text": "Fill with lettuce and the paneer mix and roll up."}
+    ],
+    "nutrition": {"calories": 486, "protein": 26, "carbs": 36, "fat": 27, "fiber": 5, "sugar": 6, "sodium": 520, "matched": 9, "total": 9, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "egg-fried-rice",
+    "title": "Egg Fried Rice",
+    "summary": "Day-old rice, eggs and vegetables tossed hot and fast.",
+    "servings": 2, "prepMinutes": 5, "cookMinutes": 10, "totalMinutes": 15,
+    "cuisine": "Chinese", "mealTypes": ["dinner", "lunch"], "tags": ["Quick", "Leftovers"],
+    "ingredients": [
+      {"text": "300 g cooked rice, cold"}, {"text": "3 eggs, beaten"}, {"text": "1 cup mixed vegetables"},
+      {"text": "2 spring onions, sliced"}, {"text": "2 cloves garlic, minced"}, {"text": "2 tbsp soy sauce"},
+      {"text": "1 tsp sesame oil"}, {"text": "1 tbsp oil"}
+    ],
+    "steps": [
+      {"text": "Scramble the eggs in half the oil for 1 minute and set aside."},
+      {"text": "Fry the garlic and vegetables in the remaining oil for 3 minutes."},
+      {"text": "Add the rice and fry for 4 minutes, breaking up clumps."},
+      {"text": "Return the eggs, add soy sauce and sesame oil, and finish with spring onions."}
+    ],
+    "nutrition": {"calories": 452, "protein": 17, "carbs": 58, "fat": 16, "fiber": 4, "sugar": 4, "sodium": 890, "matched": 8, "total": 8, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "greek-yoghurt-parfait",
+    "title": "Greek Yoghurt Berry Parfait",
+    "summary": "Thick yoghurt, honey, berries and crunchy granola in five minutes.",
+    "servings": 1, "prepMinutes": 5, "cookMinutes": 0, "totalMinutes": 5,
+    "cuisine": "Mediterranean", "mealTypes": ["breakfast", "snack"], "tags": ["Breakfast", "Snack", "No-cook"],
+    "ingredients": [
+      {"text": "200 g Greek yoghurt"}, {"text": "1 tbsp honey"}, {"text": "80 g mixed berries"}, {"text": "30 g granola"}
+    ],
+    "steps": [
+      {"text": "Layer the yoghurt, berries and granola in a glass."},
+      {"text": "Drizzle with honey and eat straight away."}
+    ],
+    "nutrition": {"calories": 318, "protein": 20, "carbs": 40, "fat": 9, "fiber": 4, "sugar": 28, "sodium": 90, "matched": 4, "total": 4, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "roasted-makhana",
+    "title": "Chaat Masala Makhana",
+    "summary": "Crunchy roasted lotus seeds — a light, tangy snack.",
+    "servings": 4, "prepMinutes": 2, "cookMinutes": 8, "totalMinutes": 10,
+    "cuisine": "Indian", "mealTypes": ["snack"], "tags": ["Snack", "Gluten free", "Quick"],
+    "ingredients": [
+      {"text": "3 cups makhana (lotus seeds)"}, {"text": "1 tbsp ghee"}, {"text": "1/2 tsp chaat masala"}, {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Roast the makhana in the ghee over low heat for 8 minutes, stirring, until crisp."},
+      {"text": "Toss with chaat masala and salt and cool before storing."}
+    ],
+    "nutrition": {"calories": 112, "protein": 3, "carbs": 15, "fat": 4, "fiber": 2, "sugar": 0, "sodium": 150, "matched": 4, "total": 4, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "hummus-veggie-plate",
+    "title": "Hummus & Crunchy Veg",
+    "summary": "Silky homemade hummus with carrot and cucumber sticks.",
+    "servings": 2, "prepMinutes": 10, "cookMinutes": 0, "totalMinutes": 10,
+    "cuisine": "Middle Eastern", "mealTypes": ["snack", "lunch"], "tags": ["Snack", "Vegan", "No-cook"],
+    "ingredients": [
+      {"text": "1 (400 g) can chickpeas, drained"}, {"text": "2 tbsp tahini"}, {"text": "1 lemon, juiced"},
+      {"text": "1 clove garlic"}, {"text": "2 tbsp olive oil"}, {"text": "2 carrots, cut into sticks"},
+      {"text": "1 cucumber, cut into sticks"}, {"text": "Salt to taste"}
+    ],
+    "steps": [
+      {"text": "Blend the chickpeas, tahini, lemon, garlic, oil and 3 tbsp cold water until smooth."},
+      {"text": "Season and serve with the vegetable sticks."}
+    ],
+    "nutrition": {"calories": 284, "protein": 10, "carbs": 26, "fat": 16, "fiber": 9, "sugar": 6, "sodium": 310, "matched": 8, "total": 8, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "red-lentil-soup",
+    "title": "Red Lentil & Carrot Soup",
+    "summary": "Velvety, cumin-scented soup that costs almost nothing to make.",
+    "servings": 4, "prepMinutes": 5, "cookMinutes": 25, "totalMinutes": 30,
+    "cuisine": "Middle Eastern", "mealTypes": ["lunch", "dinner"], "tags": ["Vegan", "Budget friendly", "Meal prep"],
+    "ingredients": [
+      {"text": "1 cup red lentils, rinsed"}, {"text": "1 onion, chopped"}, {"text": "2 carrots, chopped"},
+      {"text": "2 cloves garlic"}, {"text": "1 tsp cumin"}, {"text": "1 l vegetable stock"}, {"text": "1 lemon"},
+      {"text": "1 tbsp olive oil"}
+    ],
+    "steps": [
+      {"text": "Soften the onion and carrot in the oil for 5 minutes, then add the garlic and cumin for 1 minute."},
+      {"text": "Add the lentils and stock and simmer for 20 minutes."},
+      {"text": "Blend until smooth and finish with lemon juice."}
+    ],
+    "nutrition": {"calories": 256, "protein": 14, "carbs": 38, "fat": 5, "fiber": 8, "sugar": 6, "sodium": 640, "matched": 8, "total": 8, "source": "Flavourly kitchen"}
+  },
+  {
+    "remoteID": "shakshuka",
+    "title": "Shakshuka",
+    "summary": "Eggs poached in a spiced tomato and pepper sauce. Great for brunch.",
+    "servings": 2, "prepMinutes": 5, "cookMinutes": 20, "totalMinutes": 25,
+    "cuisine": "Middle Eastern", "mealTypes": ["breakfast", "dinner"], "tags": ["Vegetarian", "One-pan", "Brunch"],
+    "ingredients": [
+      {"text": "4 eggs"}, {"text": "1 (400 g) can chopped tomatoes"}, {"text": "1 red bell pepper, sliced"},
+      {"text": "1 onion, sliced"}, {"text": "2 cloves garlic, minced"}, {"text": "1 tsp cumin"}, {"text": "1 tsp sweet paprika"},
+      {"text": "1 tbsp olive oil"}, {"text": "40 g feta (optional)"}, {"text": "1 handful parsley"}
+    ],
+    "steps": [
+      {"text": "Soften the onion and pepper in the oil for 6 minutes."},
+      {"text": "Add the garlic and spices for 1 minute, then the tomatoes. Simmer for 8 minutes."},
+      {"text": "Make four wells, crack in the eggs, cover and cook for 6 minutes until the whites set."},
+      {"text": "Top with feta and parsley."}
+    ],
+    "nutrition": {"calories": 318, "protein": 18, "carbs": 18, "fat": 19, "fiber": 5, "sugar": 11, "sodium": 520, "matched": 10, "total": 10, "source": "Flavourly kitchen"}
+  }
+]

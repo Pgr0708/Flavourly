@@ -12,6 +12,11 @@ import CoreData
 struct FlavourlyApp: App {
     @StateObject private var settings = SettingsManager.shared
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+
+    init() {
+        // Recipe photos and API responses survive relaunches; ImageLoader reads through this.
+        URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
+    }
     var body: some Scene {
         WindowGroup {
             SplashScreenView()

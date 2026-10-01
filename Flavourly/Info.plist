@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan recipe pages from your cookbooks so Flavourly can turn them into recipes.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Save the meals you log (calories, protein, carbohydrates and fat) to Apple Health.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Listen to the audio of cooking videos you choose, on your iPhone, to write down the recipe.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Pacifico-Regular.ttf</string>

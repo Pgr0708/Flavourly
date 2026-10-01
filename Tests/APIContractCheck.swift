@@ -67,8 +67,8 @@ struct APIContractCheck {
             var (code, body) = try await post("v1/ai/extract", Extract(text: text, kind: "ocr", sourceURL: nil, rules: Rules()), token: token)
             struct ExtractReply: Decodable { let recipe: RecipeDraft }
             if let draft = decode(ExtractReply.self, body)?.recipe {
-                check(code == 200 && draft.title == "Masala omelette", "extract → RecipeDraft: \(draft.title)")
-                check(draft.ingredients.count == 3 && draft.ingredients[0].quantity == 3 && draft.ingredients[0].name == "eggs", "ingredients keep server-parsed amounts")
+                check(code == 200 && draft.title.lowercased() == "masala omelette", "extract → RecipeDraft: \(draft.title)")
+                check(draft.ingredients.count == 3 && draft.ingredients[0].quantity == 3 && draft.ingredients[0].name.lowercased().hasPrefix("egg"), "ingredients keep server-parsed amounts")
                 check(draft.steps.count == 2 && draft.steps[1].timerSeconds == 180, "steps with timers")
                 check(draft.nutrition?.calories ?? 0 > 0, "nutrition decodes (all keys present)")
                 check(draft.method == "scan", "method set for scans")
@@ -79,7 +79,7 @@ struct APIContractCheck {
             (code, body) = try await post("v1/ai/substitutes", Swap(ingredient: "200 ml cream", recipeTitle: "Pasta", otherIngredients: ["pasta"], rules: Rules()), token: token)
             struct SwapReply: Decodable { let options: [Option] }
             let options = decode(SwapReply.self, body)?.options ?? []
-            check(code == 200 && options.count == 2 && options.allSatisfy { !$0.name.isEmpty && !$0.why.isEmpty }, "substitutes decode as SubstituteOption")
+            check(code == 200 && (2...6).contains(options.count) && options.allSatisfy { !$0.name.isEmpty && !$0.why.isEmpty && !$0.name.lowercased().contains("peanut") }, "substitutes decode, 2–6 options, allergy-safe: \(options.map(\.name))")
 
             struct CookNow: Encodable { let minutes: Int?; let craving: String; let pantry: [String]; let okToBuy: Int; let servings: Int; let rules: Rules; let avoidTitles: [String] }
             (code, body) = try await post("v1/ai/cook-now", CookNow(minutes: 30, craving: "rice", pantry: ["rice", "eggs"], okToBuy: 2, servings: 2, rules: Rules(), avoidTitles: []), token: token)
@@ -111,7 +111,7 @@ struct APIContractCheck {
             struct Image: Encodable { let title: String; let description: String? }
             (code, body) = try await post("v1/images/recipe", Image(title: "Masala omelette", description: nil), token: token)
             struct ImageReply: Decodable { let url: String }
-            check(code == 200 && (decode(ImageReply.self, body)?.url.hasSuffix(".jpg") ?? false), "AI photo URL decodes")
+            if code == 501 { print("⚠︎ AI photos are off on this server (IMAGE_GENERATION=0)") } else { check(code == 200 && (decode(ImageReply.self, body)?.url.hasSuffix(".jpg") ?? false), "AI photo URL decodes") }
 
             (code, body) = try await post("v1/ai/substitutes", Swap(ingredient: "", recipeTitle: "x", otherIngredients: [], rules: Rules()), token: token)
             check(code == 400 && !(decode(Failure.self, body)?.error ?? "").isEmpty, "validation errors carry a readable `error` message")

@@ -147,7 +147,7 @@ export function createImporter({ config, fetcher, ai, cache }) {
   const complete = (recipe) => Boolean(recipe?.ingredients?.length && recipe?.steps?.length);
 
   async function extract({ text, kind, sourceURL }) {
-    const key = `extract:v1:${sha256(`${kind}|${sourceURL ?? ''}|${text}`)}`;
+    const key = `extract:v2:${sha256(`${kind}|${sourceURL ?? ''}|${text}`)}`;
     const { value } = await cache.wrap(key, 7 * DAY, () => ai.json(tasks.extract({ text, kind, sourceURL })));
     if (!value?.found || !value.recipe?.ingredients?.length) {
       throw new HttpError(422, "We couldn't find a recipe in that. Try pasting the recipe text, or a screenshot of it.");

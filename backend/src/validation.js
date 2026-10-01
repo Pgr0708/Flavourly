@@ -1,4 +1,6 @@
+import net from 'node:net';
 import { z } from 'zod';
+import { isPrivateIP } from './fetcher.js';
 import { HttpError } from './util.js';
 
 // Mirrors the app's Sanitize/Validate (Flavourly/Domain/Validation.swift) so both sides agree.
@@ -43,8 +45,10 @@ export const webUrl = z.string().transform((v) => cleanText(v)).pipe(z.string().
   .refine((value) => {
     try {
       const url = new URL(value);
+      const host = url.hostname.replace(/^\[|\]$/g, '');
       return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
-        && (url.port === '' || url.port === '80' || url.port === '443') && url.hostname.includes('.');
+        && (url.port === '' || url.port === '80' || url.port === '443') && host.includes('.')
+        && !(net.isIP(host) && isPrivateIP(host)) && !/\.(local|localhost|internal|lan)$/i.test(host);
     } catch {
       return false;
     }
@@ -100,7 +104,8 @@ export const schemas = {
   }),
   plan: z.object({
     slots: z.array(z.object({
-      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD')
+        .refine((value) => { const day = new Date(`${value}T00:00:00Z`); return !Number.isNaN(day.getTime()) && day.toISOString().startsWith(value); }, 'is not a real date'),
       slot: slotEnum,
       candidates: z.array(z.string().min(1).max(128)).max(20),
     })).min(1, 'needs at least one meal').max(35),

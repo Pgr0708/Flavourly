@@ -89,7 +89,7 @@ export const tasks = {
       'confidence is 0–1: 1 when clearly stated, 0.6 or less when vague ("some", "to taste") or when the text looks garbled.',
       'steps: in order, plain sentences; timerSeconds when a duration is stated.',
       'servings and minutes only when stated or clearly implied, otherwise null.',
-      'nutrition: estimate per serving from the listed ingredients only; matched = ingredients you could estimate, total = ingredient count; null when there are no amounts.',
+      'nutrition: always estimate per serving from the listed ingredients when amounts or counts are given ("3 eggs" counts; assume 2 servings if unstated); matched = ingredients you could estimate, total = ingredient count. null only when no line has an amount.',
       'mealTypes: the meals it suits. tags: up to 6 short tags.',
       'If there is no recipe at all, set found=false with an empty recipe. notes: short remarks for the cook (e.g. "Steps were not in the caption").',
       'Write in the language of the text.',

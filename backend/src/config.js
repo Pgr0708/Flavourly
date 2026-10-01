@@ -42,6 +42,8 @@ const schema = z.object({
 
   IMAGE_GENERATION: flag,
   IMAGE_MODEL: z.string().min(1).default('gpt-image-1'),
+  // low ≈ $0.01, medium ≈ $0.04, high ≈ $0.17 per 1024×1024 photo (gpt-image-1).
+  IMAGE_QUALITY: z.enum(['low', 'medium', 'high']).default('low'),
   IMAGE_DIR: z.string().default(path.join(ROOT, 'public', 'images')),
 
   FREE_IMPORTS_PER_WEEK: int(5, 0, 10_000),

@@ -331,7 +331,7 @@ export function createImages({ config, ai }) {
       if (!config.IMAGE_GENERATION) throw new HttpError(501, "Photo creation isn't turned on for this server.");
       const { file, url } = locate(title);
       if (await exists(file)) return { url };
-      const bytes = await ai.image({ prompt: imagePrompt({ title, description }), model: config.IMAGE_MODEL });
+      const bytes = await ai.image({ prompt: imagePrompt({ title, description }), model: config.IMAGE_MODEL, quality: config.IMAGE_QUALITY });
       await fs.mkdir(config.IMAGE_DIR, { recursive: true });
       const temp = `${file}.${process.pid}.tmp`;
       await fs.writeFile(temp, bytes);

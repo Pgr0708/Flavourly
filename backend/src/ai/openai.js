@@ -59,12 +59,12 @@ export function createOpenAI({ apiKey, model, baseUrl, timeoutMs }) {
   }
 
   /** gpt-image-1: returns raw image bytes (JPEG). */
-  async function image({ prompt, model: imageModel }) {
+  async function image({ prompt, model: imageModel, quality = 'low' }) {
     const reply = await call('/images/generations', {
       model: imageModel,
       prompt,
       size: '1024x1024',
-      quality: 'medium',
+      quality,
       output_format: 'jpeg',
       n: 1,
     }, { attempts: 2 });

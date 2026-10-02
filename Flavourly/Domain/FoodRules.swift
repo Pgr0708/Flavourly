@@ -425,6 +425,19 @@ enum FoodRules {
         }
     }
 
+    private static let highCarbTerms = [
+        "pasta", "spaghetti", "penne", "noodle", "noodles", "rice", "bread", "naan", "roti", "chapati", "paratha", "tortilla",
+        "potato", "potatoes", "sugar", "flour", "maida", "atta", "oats", "couscous", "polenta", "cornmeal", "honey", "jaggery",
+        "banana", "bun", "bagel", "semolina", "rava", "poha", "sweet potato", "corn"
+    ].map(FoodText.normalize)
+    private static let lowCarbExclusions = ["cauliflower rice", "almond flour", "coconut flour", "shirataki", "zucchini noodles", "sugar free", "sugar-free", "rice vinegar"]
+        .map(FoodText.normalize)
+
+    static func isHighCarb(_ ingredient: String) -> Bool {
+        let cleaned = clean(FoodText.normalize(ingredient), exclusions: lowCarbExclusions)
+        return highCarbTerms.contains { cleaned.contains($0) }
+    }
+
     static func isSpicy(_ ingredient: String) -> Bool {
         let text = FoodText.normalize(ingredient)
         let cleaned = clean(text, exclusions: [FoodText.normalize("sweet paprika")])
@@ -485,6 +498,13 @@ enum FoodRules {
                 add(FoodIssue(ingredient: "Carbs", kind: .diet, severity: .check,
                               reason: "\(Int(carbs)) g carbs a serving — high for low carb (\(names(people)))"))
             }
+        }
+        // No nutrition to judge carbs by: still warn keto / low-carb eaters about obvious starches.
+        if (carbsPerServing ?? 0) == 0, let people = profile.diets[.keto] ?? profile.diets[.lowCarb],
+           let starch = ingredients.first(where: isHighCarb) {
+            let diet = profile.diets[.keto] != nil ? "keto" : "low carb"
+            add(FoodIssue(ingredient: starch, kind: .diet, severity: .check,
+                          reason: "\(starch.capitalizedFirst) — probably high in carbs for \(diet) (\(names(people)))"))
         }
         result.issues.sort { ($0.severity, $0.ingredient) > ($1.severity, $1.ingredient) }
         return result

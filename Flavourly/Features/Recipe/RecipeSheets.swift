@@ -279,6 +279,7 @@ struct SubstituteSheet: View {
             }
             target.updatedAt = .now
             Kitchen.save()
+            Task { await Kitchen.refreshNutrition(target) }
             swaps[id] = nil
             DropsManager.showSuccess(title: item == nil ? "Removed from your recipe" : "Recipe updated", subtitle: item?.option.name.capitalizedFirst)
         } else {
@@ -338,7 +339,7 @@ struct AddToPlanSheet: View {
 
                     section("Meal") {
                         Picker("Meal", selection: $slot) {
-                            ForEach(MealSlot.allCases) { Text($0.label).tag($0) }
+                            ForEach(MealSlot.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
                         }
                         .pickerStyle(.segmented)
                         if !existing.isEmpty {
@@ -404,7 +405,7 @@ struct AddToPlanSheet: View {
                                     ForEach(days.filter { $0 >= day }, id: \.self) { Text($0.formatted(.dateTime.weekday(.abbreviated).day())).tag($0) }
                                 }
                                 Picker("Leftover meal", selection: $leftoverSlot) {
-                                    ForEach(MealSlot.allCases) { Text($0.label).tag($0) }
+                                    ForEach(MealSlot.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
                                 }
                             }
                             .tint(Theme.green)

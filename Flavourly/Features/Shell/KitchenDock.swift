@@ -104,7 +104,7 @@ struct KitchenDock: View {
                     .font(.system(size: 19, weight: isOn ? .bold : .medium))
                     .symbolEffect(.bounce, value: isOn)
                 if isOn {
-                    Text(tab.label)
+                    Text(LocalizedStringKey(tab.label))
                         .font(.system(size: 14, weight: .bold))
                         .lineLimit(1)
                         .fixedSize()

@@ -16,7 +16,7 @@ struct SettingsView: View {
         Form {
             Section("Kitchen") {
                 Picker("Units", selection: Binding(get: { settings.unitSystem }, set: { settings.unitSystem = $0; Haptics.select() })) {
-                    ForEach(UnitSystem.allCases) { Text($0.label).tag($0) }
+                    ForEach(UnitSystem.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
                 }
                 Picker("Oven temperature", selection: $settings.usesFahrenheit) {
                     Text("°C").tag(false)
@@ -129,7 +129,7 @@ struct SettingsView: View {
         DropsManager.showLoading(title: "Erasing your data…")
         Kitchen.eraseEverything()
         ResponseCache.shared.removeAll()
-        ImageLoader.shared.removeAll()
+        ImageCaching.removeAll()
         URLCache.shared.removeAllCachedResponses()
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix(AppStorageKeys.editorDraftPrefix) {

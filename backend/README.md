@@ -17,11 +17,15 @@ Node.js (Express 5) + MySQL + Redis backend for the Flavourly iOS app.
 | `POST /v1/ai/cook-now` | 3 ideas from time, craving and pantry | 5 a week |
 | `POST /v1/ai/plan` | Picks the week from a rule-safe shortlist | 1 a week |
 | `POST /v1/discover` | Popular home dishes for a country (+ local staples and cravings), shared by all users | free |
+| `POST /v1/nutrition` | Verified nutrition for ingredient lines (USDA, then Spoonacular) | free |
+| `POST /v1/usage` | This device's free-plan counters, so the app shows the server's numbers | — |
 | `POST /v1/images/recipe` | Optional AI recipe photo | 3 a week |
 | `POST /v1/devices/erase` | Deletes this device's server data | — |
 | `GET /healthz`, `GET /readyz` | Liveness, and readiness for DB, Redis and AI | — |
 
 Premium users, verified with RevenueCat, have no limits. Failed requests never use up a free credit.
+
+**Verified nutrition.** Every imported, scanned, AI-suggested and local recipe gets its nutrition calculated from **USDA FoodData Central** (public-domain data): each ingredient line is parsed ("1 1/2 cups flour"), converted to grams with USDA's own household portions (a cup of rice, a medium egg), and summed per serving. Lines USDA can't match go to **Spoonacular** when `SPOONACULAR_API_KEY` is set. If under 60% of lines can be verified, the AI estimate is kept and labelled "AI estimate" in the app. Every food is cached in Redis for 30 days, so each one is looked up once for all users.
 
 **Local food.** `/v1/discover` asks gpt-4o-mini once per country for ~21 well-known home dishes (breakfast, mains, regional specialities, street food, sweets), then caches them in Redis for 30 days for every user. With `IMAGE_GENERATION=1` the server also paints one photo per dish in the background (about $0.01–0.04 each with gpt-image-1, once per dish, then served from `public/images`). Set `IMAGE_GENERATION=1` in `.env` if you want the photo cards; without it the app shows illustrated covers.
 

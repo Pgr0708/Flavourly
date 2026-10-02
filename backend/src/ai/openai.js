@@ -5,7 +5,7 @@ import { HttpError, log, sleep } from '../util.js';
  * retries on 429/5xx. Native fetch — no SDK needed. The key never leaves this server.
  */
 export function createOpenAI({ apiKey, model, baseUrl, timeoutMs }) {
-  async function call(path, body, { attempts = 3 } = {}) {
+  async function call(path, body, { attempts = 3, form = false } = {}) {
     if (!apiKey) throw new HttpError(503, 'AI is not set up on the server yet.');
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -14,8 +14,8 @@ export function createOpenAI({ apiKey, model, baseUrl, timeoutMs }) {
       try {
         const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          headers: { Authorization: `Bearer ${apiKey}`, ...(form ? {} : { 'Content-Type': 'application/json' }) },
+          body: form ? body() : JSON.stringify(body),
           signal: controller.signal,
         });
         if (response.ok) return await response.json();
@@ -73,5 +73,22 @@ export function createOpenAI({ apiKey, model, baseUrl, timeoutMs }) {
     return Buffer.from(b64, 'base64');
   }
 
-  return { json, image, get configured() { return Boolean(apiKey); } };
+  /** Speech → text for the audio of a video the user picked themselves. `audio` is a Buffer. */
+  async function transcribe({ audio, mimeType, model: speechModel, prompt }) {
+    const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : mimeType.split('/')[1]?.replace(/[^a-z0-9]/g, '') || 'm4a';
+    // A fresh FormData per attempt: a consumed body can't be re-sent on retry.
+    const form = () => {
+      const data = new FormData();
+      data.append('file', new Blob([audio], { type: mimeType }), `audio.${ext}`);
+      data.append('model', speechModel);
+      data.append('response_format', 'json');
+      if (prompt) data.append('prompt', prompt);
+      return data;
+    };
+    const reply = await call('/audio/transcriptions', form, { attempts: 2, form: true });
+    log.info('openai transcribe ok', { bytes: audio.length });
+    return String(reply?.text ?? '').trim();
+  }
+
+  return { json, image, transcribe, get configured() { return Boolean(apiKey); } };
 }

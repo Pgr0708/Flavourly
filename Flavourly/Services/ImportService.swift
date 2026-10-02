@@ -205,7 +205,7 @@ final class ImportService: ObservableObject {
 
     private func checkAllowance() throws {
         guard Usage.canUse(.importRecipe) else {
-            throw Failure(title: "Free imports used", message: "You've used this week's \(Feature.importRecipe.weeklyFree) free imports.", partial: nil, isLimit: true)
+            throw Failure(title: "Free imports used", message: "You've used this week's \(Usage.limit(.importRecipe)) free imports.", partial: nil, isLimit: true)
         }
     }
 

@@ -7,7 +7,7 @@ struct LocalDishesSection: View {
 
     var body: some View {
         let profile = People.profile()
-        let dishes = local.dishes.filter { !FoodRules.check(ingredients: $0.checkLines, profile: profile).isBlocked }
+        let dishes = local.dishes.filter { LocalFood.fits($0, profile) }
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {

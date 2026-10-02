@@ -129,6 +129,11 @@ export function startFakeOpenAI({ port = 0, slowMs = 3_000 } = {}) {
       if (req.headers.authorization !== 'Bearer test-key' && req.headers.authorization !== 'Bearer local-dev-key') {
         return send(401, { error: { message: 'bad key' } });
       }
+      if (req.url === '/v1/audio/transcriptions') {
+        calls.push({ path: req.url, body: { model: /name="model"\r\n\r\n([^\r]+)/.exec(raw)?.[1], bytes: raw.length } });
+        if (raw.includes('SILENT')) return send(200, { text: '' });
+        return send(200, { text: 'Garlic noodles. Ingredients: 200 g noodles, 2 cloves garlic, 1 tbsp butter. Boil the noodles for 8 minutes, then toss with the garlic butter.' });
+      }
       const request = JSON.parse(raw || '{}');
       calls.push({ path: req.url, body: request });
       if (req.url === '/v1/images/generations') return send(200, { data: [{ b64_json: TINY_JPEG }] });
@@ -166,8 +171,11 @@ export function startFakeRevenueCat() {
     };
     if (req.headers.authorization !== 'Bearer sk_test') return send(401, {});
     if (id.startsWith('rcfail')) return send(500, {});
-    const entitlements = id.startsWith('premium') ? { premium: { expires_date: null } }
-      : id.startsWith('expired') ? { premium: { expires_date: '2020-01-01T00:00:00Z' } } : {};
+    // Same entitlement ids as the app: "pro" (subscriptions) and "lifetime" (one-off purchase).
+    const entitlements = id.startsWith('premium') ? { pro: { expires_date: '2099-01-01T00:00:00Z' } }
+      : id.startsWith('lifetime') ? { lifetime: { expires_date: null } }
+        : id.startsWith('expired') ? { pro: { expires_date: '2020-01-01T00:00:00Z' } }
+          : id.startsWith('other') ? { premium: { expires_date: null } } : {};
     return send(200, { subscriber: { entitlements } });
   });
   return new Promise((resolve) => {
@@ -178,4 +186,49 @@ export function startFakeRevenueCat() {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const port = Number(process.env.PORT ?? 9911);
   startFakeOpenAI({ port }).then(({ url }) => console.log(`Fake OpenAI listening at ${url} (use OPENAI_API_KEY=local-dev-key)`));
+}
+
+/**
+ * USDA FoodData Central + Spoonacular stand-ins (an injected `fetch`). USDA knows a handful of real
+ * foods (values per 100 g from SR Legacy); Spoonacular answers for anything when given a key.
+ */
+export function fakeFoodApis() {
+  const calls = [];
+  const n = (number, value) => ({ nutrientNumber: number, value });
+  const foods = {
+    egg: { fdcId: 171287, description: 'Egg, whole, raw, fresh', nutrients: [n('208', 143), n('203', 12.6), n('205', 0.7), n('204', 9.5), n('291', 0), n('269', 0.4), n('307', 142)],
+      portions: [{ gramWeight: 50, amount: 1, modifier: 'large', measureUnit: { name: 'undetermined' } }, { gramWeight: 44, amount: 1, modifier: 'medium', measureUnit: { name: 'undetermined' } }] },
+    onion: { fdcId: 170000, description: 'Onions, raw', nutrients: [n('208', 40), n('203', 1.1), n('205', 9.3), n('204', 0.1), n('291', 1.7), n('269', 4.2), n('307', 4)],
+      portions: [{ gramWeight: 110, amount: 1, modifier: 'medium (2-1/2" dia)', measureUnit: { name: 'undetermined' } }, { gramWeight: 160, amount: 1, modifier: 'cup, chopped', measureUnit: { name: 'undetermined' } }] },
+    rice: { fdcId: 169756, description: 'Rice, white, long-grain, regular, raw', nutrients: [n('208', 365), n('203', 7.1), n('205', 80), n('204', 0.7), n('291', 1.3), n('269', 0.1), n('307', 5)],
+      portions: [{ gramWeight: 185, amount: 1, modifier: 'cup', measureUnit: { name: 'undetermined' } }] },
+    'olive oil': { fdcId: 171413, description: 'Oil, olive, salad or cooking', nutrients: [n('208', 884), n('203', 0), n('205', 0), n('204', 100), n('307', 2)],
+      portions: [{ gramWeight: 13.5, amount: 1, modifier: 'tbsp', measureUnit: { name: 'undetermined' } }] },
+  };
+  const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  async function http(url, init = {}) {
+    const u = new URL(url);
+    calls.push({ host: u.hostname, path: u.pathname, query: u.searchParams.get('query'), body: init.body ? String(init.body) : null });
+    if (u.hostname === 'api.nal.usda.gov') {
+      if (u.searchParams.get('api_key') === 'RATE_LIMITED') return json(429, { error: 'OVER_RATE_LIMIT' });
+      if (u.pathname.endsWith('/foods/search')) {
+        const query = (u.searchParams.get('query') ?? '').toLowerCase();
+        const hit = Object.entries(foods).find(([name]) => query === name || query === `${name}s` || query.endsWith(` ${name}`));
+        // A decoy first result proves the "same food" check: "Egg rolls" must not match "eggplant".
+        const decoy = { fdcId: 1, description: 'Babyfood, dessert, custard', foodNutrients: [n('208', 1)] };
+        return json(200, { foods: hit ? [decoy, { fdcId: hit[1].fdcId, description: hit[1].description, foodNutrients: hit[1].nutrients }] : [decoy] });
+      }
+      const food = Object.values(foods).find((f) => u.pathname.endsWith(`/food/${f.fdcId}`));
+      return food ? json(200, { foodPortions: food.portions }) : json(404, {});
+    }
+    if (u.hostname === 'api.spoonacular.com') {
+      const lines = new URLSearchParams(String(init.body)).get('ingredientList').split('\n');
+      return json(200, lines.map((line) => ({ original: line, nutrition: { nutrients: [
+        { name: 'Calories', amount: 265, unit: 'kcal' }, { name: 'Protein', amount: 18, unit: 'g' }, { name: 'Carbohydrates', amount: 1.2, unit: 'g' },
+        { name: 'Fat', amount: 20.8, unit: 'g' }, { name: 'Sodium', amount: 18, unit: 'mg' },
+      ] } })));
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  }
+  return { http, calls };
 }

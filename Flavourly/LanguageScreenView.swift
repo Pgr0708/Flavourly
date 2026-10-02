@@ -1,6 +1,6 @@
 //
 //  LanguageScreenView.swift
-//  GoViral
+//  Flavourly
 //
 //  Created by Minaxi on 16/08/26.
 //

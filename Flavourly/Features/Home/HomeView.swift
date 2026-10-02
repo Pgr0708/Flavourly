@@ -192,7 +192,7 @@ struct HomeView: View {
             HStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.check)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(needsReview.count) recipe\(needsReview.count == 1 ? "" : "s") need a quick check")
+                    Text("\(needsReview.count) recipes need a quick check")
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.check)
                     Text("Amounts or allergens we weren't sure about.").font(Theme.micro).foregroundStyle(Color(hex: "#5C3A00"))
                 }

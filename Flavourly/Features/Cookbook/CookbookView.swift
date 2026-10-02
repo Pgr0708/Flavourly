@@ -19,11 +19,17 @@ struct RecipeFilters: Equatable {
     var cuisines: Set<String> = []
     var history: History = .all
     var minRating = 0
+    var difficulty: Difficulty?
+    var equipment: Equipment?
+    var maxCalories: Int?
+    var minProtein: Int?
+    var maxCost: Double?
     var sort: Sort = .newest
 
     var activeCount: Int {
         (slot == nil ? 0 : 1) + (maxMinutes == nil ? 0 : 1) + diets.count + cuisines.count
-            + (history == .all ? 0 : 1) + (minRating == 0 ? 0 : 1)
+            + (history == .all ? 0 : 1) + (minRating == 0 ? 0 : 1) + (difficulty == nil ? 0 : 1)
+            + (equipment == nil ? 0 : 1) + (maxCalories == nil ? 0 : 1) + (minProtein == nil ? 0 : 1) + (maxCost == nil ? 0 : 1)
     }
 
     func apply(to recipes: [Recipe], query: String) -> [Recipe] {
@@ -39,6 +45,17 @@ struct RecipeFilters: Equatable {
                 return false
             }
             if !cuisines.isEmpty, !cuisines.contains(where: { $0.caseInsensitiveCompare(recipe.cuisine ?? "") == .orderedSame }) { return false }
+            if let difficulty, recipe.level > difficulty { return false }
+            if let equipment {
+                let needs = recipe.equipment
+                // "Air fryer" shows air-fryer recipes; "Stovetop" shows recipes that need nothing else.
+                if equipment == .stovetop ? !needs.isSubset(of: [.stovetop, .noCook]) || needs.isEmpty : !needs.contains(equipment) { return false }
+            }
+            // Unknown nutrition never passes a nutrition filter: a promise of "under 500 kcal" must be checkable.
+            if let maxCalories, recipe.calories == 0 || recipe.calories > Double(maxCalories) { return false }
+            if let minProtein, recipe.calories == 0 || recipe.protein < Double(minProtein) { return false }
+            // Same rule for cost: only recipes priced from the cook's own shopping can promise a budget.
+            if let maxCost, (recipe.costEstimate?.perServing ?? .infinity) > maxCost { return false }
             switch history {
             case .all: break
             case .cooked: if recipe.cookedCount == 0 { return false }
@@ -194,12 +211,12 @@ struct CookbookView: View {
 
         let list = visible
         HStack {
-            Text(search.query.isEmpty ? "Recently saved" : "\(list.count) result\(list.count == 1 ? "" : "s")")
+            Text(search.query.isEmpty ? "Recently saved" : "\(list.count) results")
                 .font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.ink)
             Spacer()
             Menu {
                 Picker("Sort", selection: $filters.sort) {
-                    ForEach(RecipeFilters.Sort.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(RecipeFilters.Sort.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -298,6 +315,7 @@ struct CookbookView: View {
         Button {
             recipe.isFavorite.toggle()
             Kitchen.save()
+            Kitchen.relearnTaste()
             Haptics.success()
         } label: {
             Label(recipe.isFavorite ? "Remove from favourites" : "Add to favourites", systemImage: recipe.isFavorite ? "heart.slash" : "heart")
@@ -497,7 +515,7 @@ struct CollectionTile: View {
             }
             .frame(width: 112, height: 112)
             Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
-            Text("\(count) recipe\(count == 1 ? "" : "s")").font(Theme.micro).foregroundStyle(Theme.muted)
+            Text("\(count) recipes").font(Theme.micro).foregroundStyle(Theme.muted)
         }
         .frame(width: 112, alignment: .leading)
     }
@@ -510,7 +528,13 @@ struct FiltersSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft = RecipeFilters()
 
-    private let cuisines = ["Indian", "Italian", "Mediterranean", "Middle Eastern", "Mexican", "Chinese", "Thai", "Japanese", "American", "French", "Korean"]
+    /// The cook's own cuisines first (country + recipes they have), then common ones.
+    private var cuisines: [String] {
+        let mine = [LocalFood.shared.cuisine] + Kitchen.candidates().compactMap(\.cuisine)
+        let common = ["Italian", "Mediterranean", "Middle Eastern", "Mexican", "Chinese", "Thai", "Japanese", "American", "French"]
+        let all = (mine + common).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return Array(NSOrderedSet(array: all)) as? [String] ?? common
+    }
 
     var body: some View {
         NavigationStack {
@@ -565,15 +589,56 @@ struct FiltersSheet: View {
                             }
                         }
                     }
+                    group("Difficulty") {
+                        Picker("Difficulty", selection: $draft.difficulty) {
+                            Text("Any").tag(Difficulty?.none)
+                            Text("Easy").tag(Difficulty?.some(.easy))
+                            Text("Easy–medium").tag(Difficulty?.some(.medium))
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    group("Equipment") {
+                        FlowLayout {
+                            ForEach(Equipment.allCases) { item in
+                                Chip(title: item.label, isOn: draft.equipment == item) { draft.equipment = draft.equipment == item ? nil : item }
+                            }
+                        }
+                    }
+                    group("Calories per serving") {
+                        Picker("Calories", selection: $draft.maxCalories) {
+                            Text("Any").tag(Int?.none)
+                            ForEach([300, 450, 600, 800], id: \.self) { Text("≤ \($0)").tag(Int?.some($0)) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    group("Protein per serving") {
+                        Picker("Protein", selection: $draft.minProtein) {
+                            Text("Any").tag(Int?.none)
+                            ForEach([15, 25, 35], id: \.self) { Text("≥ \($0) g").tag(Int?.some($0)) }
+                        }
+                        .pickerStyle(.segmented)
+                        if draft.maxCalories != nil || draft.minProtein != nil {
+                            Text("Only recipes with known nutrition are shown.").font(Theme.micro).foregroundStyle(Theme.muted)
+                        }
+                    }
+                    group("Cost per serving") {
+                        Picker("Cost", selection: $draft.maxCost) {
+                            Text("Any").tag(Double?.none)
+                            ForEach(PriceBook.steps(currency: Kitchen.currency), id: \.self) { Text("≤ \(Kitchen.money($0))").tag(Double?.some($0)) }
+                        }
+                        .pickerStyle(.segmented)
+                        Text(draft.maxCost == nil ? "Costs come from prices you add on your grocery list." : "Only recipes whose cost is known from your grocery prices are shown.")
+                            .font(Theme.micro).foregroundStyle(Theme.muted)
+                    }
                     group("History") {
                         Picker("History", selection: $draft.history) {
-                            ForEach(RecipeFilters.History.allCases) { Text($0.rawValue).tag($0) }
+                            ForEach(RecipeFilters.History.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
                     group("Sort by") {
                         Picker("Sort by", selection: $draft.sort) {
-                            ForEach(RecipeFilters.Sort.allCases) { Text($0.rawValue).tag($0) }
+                            ForEach(RecipeFilters.Sort.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                         }
                         .pickerStyle(.segmented)
                     }
@@ -711,7 +776,7 @@ struct CollectionView: View {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(Theme.pageTitle).foregroundStyle(Theme.ink)
-                    Text("\(recipes.count) recipe\(recipes.count == 1 ? "" : "s")").font(Theme.caption).foregroundStyle(Theme.ink2)
+                    Text("\(recipes.count) recipes").font(Theme.caption).foregroundStyle(Theme.ink2)
                 }
                 if recipes.isEmpty {
                     EmptyStateView(systemImage: smart?.symbol ?? "folder", title: "Nothing here yet",

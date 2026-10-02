@@ -61,12 +61,30 @@ struct RecipeFacts: Equatable {
     var protein: Double = 0
     var calories: Double = 0
     var carbs: Double = 0
+    var difficulty: Difficulty = .easy
+    var equipment: Set<Equipment> = []
 }
 
 struct PantrySignal: Equatable {
     let key: String
     let name: String
     let daysLeft: Int?
+    /// How much is left, when the cook tracks it (0 = unknown).
+    var quantity: Double = 0
+    var unit: String = ""
+
+    /// False only when both amounts are known, comparable, and the pantry clearly has too little.
+    func covers(_ line: String) -> Bool {
+        guard quantity > 0 else { return true }
+        let need = IngredientParser.parse(line)
+        guard let wanted = need.quantity, wanted > 0 else { return true }
+        if let a = Units.toBase(wanted, unit: need.unit), let b = Units.toBase(quantity, unit: unit), Units.family(need.unit) == Units.family(unit) {
+            return b >= a * 0.95
+        }
+        let counts: Set<String> = ["", "piece"]
+        if need.unit == unit || (counts.contains(need.unit) && counts.contains(unit)) { return quantity >= wanted * 0.95 }
+        return true // g vs cups: can't tell, so trust the cook
+    }
 }
 
 struct RankContext {
@@ -85,6 +103,16 @@ struct RankContext {
     var localCuisine: String? = RankContext.localCuisine
     /// Set by LocalFood once it knows the country's cuisine.
     nonisolated(unsafe) static var localCuisine: String?
+    /// The most demanding level that suits this cook (from the setup quiz); harder recipes rank lower.
+    var skillCap: Difficulty? = RankContext.skillCap
+    nonisolated(unsafe) static var skillCap: Difficulty?
+    /// Automatic plans: also skip recipes that only *might* contain an allergen ("pesto" → nuts?).
+    var strictAllergens = false
+    var maxCalories: Double?
+    var minProtein: Double?
+    /// Learned from what this cook makes and rates (set by the app after cooking).
+    var taste: TasteProfile = RankContext.taste
+    nonisolated(unsafe) static var taste = TasteProfile()
 }
 
 struct Ranked: Identifiable {
@@ -113,6 +141,9 @@ enum Recommender {
         guard !context.exclude.contains(recipe.id) else { return nil }
         let check = FoodRules.check(ingredients: recipe.ingredientNames, profile: context.profile, carbsPerServing: recipe.carbs)
         if check.isBlocked || check.hasDislike { return nil }
+        if context.strictAllergens, !check.allergenIssues.isEmpty { return nil }
+        if let cap = context.maxCalories, recipe.calories > cap { return nil }
+        if let floor = context.minProtein, recipe.calories > 0, recipe.protein < floor { return nil }
         if let limit = context.maxMinutes, recipe.minutes > 0, recipe.minutes > limit { return nil }
         let slots = recipe.slots.isEmpty ? MealSlot.infer(title: recipe.title, tags: recipe.tags) : recipe.slots
         if let slot = context.slot, !slots.contains(slot) { return nil }
@@ -123,7 +154,7 @@ enum Recommender {
             let key = FoodText.key(name)
             guard !key.isEmpty, !GroceryBuilder.staples.contains(key) else { continue }
             counted += 1
-            if let stock = context.pantry.first(where: { matches(key, $0.key) }) {
+            if let stock = context.pantry.first(where: { matches(key, $0.key) }), stock.covers(name) {
                 have.append(stock.name)
                 if let days = stock.daysLeft, days <= 3 { useSoon.append(stock.name) }
             } else {
@@ -164,6 +195,9 @@ enum Recommender {
             score += Double(recipe.rating - 3) * 0.4
             if recipe.rating >= 4 { reasons.append("You rated it \(recipe.rating)★") }
         }
+        let learned = context.taste.score(recipe)
+        score += learned.boost
+        if let reason = learned.reason, recipe.cookedCount == 0, reasons.count < 3 { reasons.insert(reason, at: 0) }
         if recipe.isFavorite { score += 0.8 }
         if let cuisine = recipe.cuisine, context.cuisines.contains(where: { $0.caseInsensitiveCompare(cuisine) == .orderedSame }) {
             score += 0.6
@@ -188,6 +222,11 @@ enum Recommender {
             if reasons.count < 3 { reasons.append("Not tried yet") }
         }
         if check.needsCheck { score -= 0.5 }
+        if let cap = context.skillCap, recipe.difficulty > cap {
+            score -= Double(recipe.difficulty.rawValue - cap.rawValue)
+        } else if context.skillCap == .easy, recipe.difficulty == .easy, reasons.count < 3 {
+            reasons.append("Easy to cook")
+        }
 
         return Ranked(facts: recipe, score: score, reasons: Array(reasons.prefix(3)), have: have, missing: missing,
                       useSoon: useSoon, coverage: coverage, check: check)
@@ -233,6 +272,9 @@ struct PlannerOptions {
     var leftoversForLunch = true
     var weeknightMax: Int? = 30
     var weekendMax: Int? = 60
+    /// Daily targets: when set, each day's picks are steered towards them (only recipes with known nutrition count).
+    var dailyCalories: Double?
+    var dailyProtein: Double?
 }
 
 enum Planner {
@@ -252,6 +294,7 @@ enum Planner {
         for (slot, id) in existing where slot.slot == .dinner { dinners[calendar.startOfDay(for: slot.day)] = (slot, id) }
         var picks: [PlanPick] = []
         let titles = Dictionary(recipes.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
+
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE"
 
@@ -285,13 +328,40 @@ enum Planner {
                     .union(existing.filter { neighbours.contains(calendar.startOfDay(for: $0.key.day)) }.values)
                 ranked = Recommender.rank(recipes, context)
             }
-            guard let best = ranked.first else { continue }
+            var chosen = ranked.first
+            var balanceNote: String?
+            if let target = options.dailyCalories, target > 0, ranked.count > 1 {
+                // Share of the day this meal should carry; pick among the top few the one that lands closest.
+                let share: Double = [.breakfast: 0.25, .lunch: 0.35, .dinner: 0.35, .snack: 0.1][slot.slot] ?? 0.3
+                let slotCalories = target * share
+                let slotProtein = (options.dailyProtein ?? 0) * share
+                let top = ranked.prefix(8)
+                let balanced = top.max { a, b in balanceScore(a, slotCalories, slotProtein) < balanceScore(b, slotCalories, slotProtein) }
+                if let balanced, balanced.id != ranked.first?.id, balanced.facts.calories > 0 {
+                    chosen = balanced
+                    balanceNote = "Keeps the day near \(Int(target)) kcal"
+                }
+            }
+            guard let best = chosen else { continue }
             used[best.id, default: 0] += 1
             if slot.slot == .dinner { dinners[day] = (slot, best.id) }
-            let why = best.reasons.isEmpty ? "Fits your rules" : best.reasons.joined(separator: " · ")
+            let why = ([balanceNote].compactMap { $0 } + best.reasons).prefix(3).joined(separator: " · ").nilIfEmpty ?? "Fits your rules"
             picks.append(PlanPick(slot: slot, recipeID: best.id, leftoverOf: nil,
                                   reason: isCookDay ? why : "Quick one for a no-cook day · " + why))
         }
         return picks
     }
+
+    /// Ranking score minus how far the recipe lands from this meal's share of the day's targets.
+    /// Recipes with unknown nutrition keep their score (they can't be steered, but aren't punished).
+    static func balanceScore(_ ranked: Ranked, _ calories: Double, _ protein: Double) -> Double {
+        guard ranked.facts.calories > 0, calories > 0 else { return ranked.score - 0.5 }
+        var score = ranked.score - abs(ranked.facts.calories - calories) / calories * 2
+        if protein > 0 { score -= max(0, protein - ranked.facts.protein) / protein }
+        return score
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

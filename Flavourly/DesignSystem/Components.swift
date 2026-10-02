@@ -17,6 +17,7 @@ struct PressableStyle: ButtonStyle {
 
 struct PrimaryButton: View {
     let title: String
+    @Environment(\.locale) private var locale
     var systemImage: String?
     var tone: ButtonTone = .green
     var isLoading = false
@@ -36,7 +37,7 @@ struct PrimaryButton: View {
                 } else if let systemImage {
                     Image(systemName: systemImage).font(.system(size: 16, weight: .semibold))
                 }
-                Text(title).font(.system(size: height < 50 ? 15 : 16, weight: .semibold))
+                Text(Lang.text(title, locale)).font(.system(size: height < 50 ? 15 : 16, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -81,6 +82,7 @@ struct PrimaryButton: View {
 struct IconButton: View {
     let systemImage: String
     let label: String
+    @Environment(\.locale) private var locale
     var style: Style = .plain
     var tint: Color = Theme.ink
     let action: () -> Void
@@ -107,7 +109,7 @@ struct IconButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PressableStyle(scale: 0.9))
-        .accessibilityLabel(label)
+        .accessibilityLabel(Lang.text(label, locale))
     }
 }
 
@@ -115,6 +117,7 @@ struct IconButton: View {
 
 struct Chip: View {
     let title: String
+    @Environment(\.locale) private var locale
     var systemImage: String?
     var isOn = false
     var style: Style = .ink
@@ -131,7 +134,7 @@ struct Chip: View {
             HStack(spacing: 5) {
                 if let systemImage { Image(systemName: systemImage).font(.system(size: small ? 11 : 12, weight: .bold)) }
                 else if isOn, style != .ink { Image(systemName: "checkmark").font(.system(size: small ? 10 : 11, weight: .heavy)) }
-                Text(title).font(Theme.heading(small ? 12 : 13, .demiBold)).lineLimit(1)
+                Text(Lang.text(title, locale)).font(Theme.heading(small ? 12 : 13, .demiBold)).lineLimit(1)
             }
             .padding(.horizontal, small ? 10 : 14)
             .frame(height: small ? 30 : 36)
@@ -181,13 +184,14 @@ enum BadgeTone { case green, red, amber, purple, teal, neutral, gold, pink, whit
 
 struct Badge: View {
     let text: String
+    @Environment(\.locale) private var locale
     var systemImage: String?
     var tone: BadgeTone = .neutral
 
     var body: some View {
         HStack(spacing: 4) {
             if let systemImage { Image(systemName: systemImage).font(.system(size: 10, weight: .bold)) }
-            Text(text).font(Theme.heading(11, .demiBold)).lineLimit(1)
+            Text(Lang.text(text, locale)).font(Theme.heading(11, .demiBold)).lineLimit(1)
         }
         .padding(.horizontal, 8)
         .frame(height: 22)
@@ -255,6 +259,7 @@ struct FlowLayout: Layout {
 
 struct SectionHeader: View {
     let title: String
+    @Environment(\.locale) private var locale
     var subtitle: String?
     var actionTitle: String?
     var action: (() -> Void)?
@@ -262,12 +267,12 @@ struct SectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.heading(19)).foregroundStyle(Theme.ink)
-                if let subtitle { Text(subtitle).font(Theme.micro).foregroundStyle(Theme.muted) }
+                Text(Lang.text(title, locale)).font(Theme.heading(19)).foregroundStyle(Theme.ink)
+                if let subtitle { Text(Lang.text(subtitle, locale)).font(Theme.micro).foregroundStyle(Theme.muted) }
             }
             Spacer()
             if let actionTitle, let action {
-                Button(actionTitle) {
+                Button(Lang.text(actionTitle, locale)) {
                     Haptics.tick()
                     action()
                 }
@@ -372,6 +377,7 @@ struct CheckCircle: View {
 
 struct ToggleRow: View {
     let title: String
+    @Environment(\.locale) private var locale
     var subtitle: String?
     var systemImage: String?
     var tint: Color = Theme.green
@@ -387,8 +393,8 @@ struct ToggleRow: View {
                     IconTile(systemImage: systemImage, tint: tint)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
-                    if let subtitle { Text(subtitle).font(Theme.micro).foregroundStyle(Theme.muted) }
+                    Text(Lang.text(title, locale)).font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
+                    if let subtitle { Text(Lang.text(subtitle, locale)).font(Theme.micro).foregroundStyle(Theme.muted) }
                 }
             }
         }
@@ -548,6 +554,7 @@ struct EmptyStateView: View {
     var imageName: String? = "HomeEmptyPot"
     var systemImage: String?
     let title: String
+    @Environment(\.locale) private var locale
     let message: String
     var actionTitle: String?
     var action: (() -> Void)?
@@ -564,8 +571,8 @@ struct EmptyStateView: View {
             } else if let imageName {
                 Image(imageName).resizable().scaledToFit().frame(height: 110).accessibilityHidden(true)
             }
-            Text(title).font(Theme.serif(19)).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
-            Text(message).font(Theme.caption).foregroundStyle(Theme.ink2).multilineTextAlignment(.center)
+            Text(Lang.text(title, locale)).font(Theme.serif(19)).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
+            Text(Lang.text(message, locale)).font(Theme.caption).foregroundStyle(Theme.ink2).multilineTextAlignment(.center)
             if let actionTitle, let action {
                 PrimaryButton(title: actionTitle, tone: .soft, height: 44, action: action)
                     .frame(maxWidth: 240)
@@ -633,14 +640,15 @@ struct ConfettiView: View {
 /// Sheet header with title and close button.
 struct SheetHeader: View {
     let title: String
+    @Environment(\.locale) private var locale
     var subtitle: String?
     var onClose: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(Theme.sheetTitle).foregroundStyle(Theme.ink)
-                if let subtitle { Text(subtitle).font(Theme.micro).foregroundStyle(Theme.muted) }
+                Text(Lang.text(title, locale)).font(Theme.sheetTitle).foregroundStyle(Theme.ink)
+                if let subtitle { Text(Lang.text(subtitle, locale)).font(Theme.micro).foregroundStyle(Theme.muted) }
             }
             Spacer()
             if let onClose {
@@ -668,10 +676,11 @@ func durationText(_ minutes: Int) -> String {
 /// Inline validation message under a field — tells the user exactly what to fix.
 struct FieldError: View {
     let message: String?
+    @Environment(\.locale) private var locale
 
     var body: some View {
         if let message {
-            Label(message, systemImage: "exclamationmark.circle.fill")
+            Label(Lang.text(message, locale), systemImage: "exclamationmark.circle.fill")
                 .font(Theme.micro.weight(.medium))
                 .foregroundStyle(Theme.allergen)
                 .fixedSize(horizontal: false, vertical: true)

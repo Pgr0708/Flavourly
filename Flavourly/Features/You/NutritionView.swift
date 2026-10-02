@@ -166,7 +166,7 @@ struct NutritionView: View {
             IconTile(systemImage: (MealSlot(rawValue: entry.slot ?? "") ?? .dinner).symbol, tint: Theme.capture, size: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title ?? "Meal").font(.system(size: 15, weight: .medium)).lineLimit(1)
-                Text("\(Int(entry.calories)) kcal · \(Int(entry.protein)) g protein\(entry.syncedToHealth ? " · in Health" : "")")
+                Text(entry.syncedToHealth ? "\(Int(entry.calories)) kcal · \(Int(entry.protein)) g protein · in Health" : "\(Int(entry.calories)) kcal · \(Int(entry.protein)) g protein")
                     .font(Theme.micro).foregroundStyle(Theme.muted)
             }
             Spacer()
@@ -204,7 +204,7 @@ private struct LogMealSheet: View {
                     FieldError(message: calorieCheck.message)
                 }
                 Picker("Meal", selection: $slot) {
-                    ForEach(MealSlot.allCases) { Text($0.label).tag($0) }
+                    ForEach(MealSlot.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
                 }
             }
             .tint(Theme.green)

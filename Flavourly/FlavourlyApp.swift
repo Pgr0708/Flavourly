@@ -14,8 +14,9 @@ struct FlavourlyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     init() {
-        // Recipe photos and API responses survive relaunches; ImageLoader reads through this.
-        URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
+        // API responses survive relaunches; recipe photos use Kingfisher's own memory + disk cache.
+        URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 64 << 20)
+        ImageCaching.configure()
     }
     var body: some Scene {
         WindowGroup {
@@ -23,7 +24,7 @@ struct FlavourlyApp: App {
                 .environmentObject(settings)
                 .environment(
                     \.locale,
-                     Locale(identifier: settings.languageCode)
+                     Locale(identifier: Lang.lproj(for: settings.languageCode))
                      )
                 .environment(
                            \.managedObjectContext,

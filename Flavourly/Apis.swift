@@ -25,5 +25,10 @@ enum Apis {
     static let cookNow = "v1/ai/cook-now"
     static let recipeImage = "v1/images/recipe"
     static let discover = "v1/discover"
+    static let nutrition = "v1/nutrition"
+    static let usage = "v1/usage"
     static let eraseDevice = "v1/devices/erase"
+    
+    static let SpoonacularApiKey = "092db8b96bf843e4b7667c71789eb071"
+    static let USDAFoodDataApiKey  = "ouPsij2RjPb663CsGIQVIpxKPp5PnsCFNd9TIUcf"
 }

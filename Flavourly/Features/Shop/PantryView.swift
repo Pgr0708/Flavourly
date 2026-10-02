@@ -28,6 +28,7 @@ struct PantryContent: View {
     @State private var newItem = ""
     @State private var editing: PantryItem?
     @State private var adding = false
+    @State private var scanning = false
     @State private var addError: String?
     @FocusState private var typing: Bool
 
@@ -43,7 +44,17 @@ struct PantryContent: View {
                     .submitLabel(.done)
                     .onSubmit(quickAdd)
                     .onChange(of: newItem) { _, _ in addError = nil }
-                if !newItem.isEmpty { Button("Add", action: quickAdd).font(.system(size: 14, weight: .semibold)).tint(Theme.pantry) }
+                if !newItem.isEmpty {
+                    Button("Add", action: quickAdd).font(.system(size: 14, weight: .semibold)).tint(Theme.pantry)
+                } else {
+                    Button {
+                        Haptics.tick()
+                        scanning = true
+                    } label: {
+                        Image(systemName: "barcode.viewfinder").font(.system(size: 20)).foregroundStyle(Theme.pantry)
+                    }
+                    .accessibilityLabel("Scan a product barcode")
+                }
             }
             .padding(12)
             .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -81,6 +92,7 @@ struct PantryContent: View {
         }
         .sheet(item: $editing) { PantryItemSheet(item: $0).environmentObject(settings) }
         .sheet(isPresented: $adding) { PantryItemSheet(item: nil).environmentObject(settings) }
+        .sheet(isPresented: $scanning) { BarcodeScanSheet() }
         .onReceive(NotificationCenter.default.publisher(for: .addPantryItem)) { _ in adding = true }
     }
 

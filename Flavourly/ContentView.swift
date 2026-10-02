@@ -115,10 +115,16 @@ struct ContentView: View {
             if let target = note.object as? AppTab { tab = target }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { processSharedInbox() }
+            if phase == .active {
+                processSharedInbox()
+                Task { await Usage.sync() }
+            }
         }
         .task {
+            RankContext.skillCap = Difficulty(skill: settings.customizationPreferences.choices["skill"]?.first)
+            Kitchen.relearnTaste()
             processSharedInbox()
+            Task { await Usage.sync() }
             NotificationService.shared.reschedule()
             if !settings.hasSeenNotificationPrompt {
                 try? await Task.sleep(for: .seconds(1.2))

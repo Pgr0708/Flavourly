@@ -349,6 +349,9 @@ struct RecipeEditorView: View {
         final.flags = []
         final.method = final.method ?? "manual"
         let saved = Kitchen.save(final, into: recipe.map(Kitchen.adopt), imageData: imageData)
+        if final.ingredients.map(\.text) != original.ingredients.map(\.text) || final.servings != original.servings {
+            Task { await Kitchen.refreshNutrition(saved) }
+        }
         UserDefaults.standard.removeObject(forKey: storageKey)
         DropsManager.showSuccess(title: recipe == nil ? "Saved to your cookbook" : "Recipe updated", subtitle: saved.displayTitle)
         dismiss()

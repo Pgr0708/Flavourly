@@ -240,6 +240,7 @@ extension RecipeDraft {
             nutrition.sodium = clamp(nutrition.sodium, 50_000)
             nutrition.matched = max(0, nutrition.matched)
             nutrition.total = max(nutrition.matched, nutrition.total)
+            nutrition.source = nutrition.source.map { String(Sanitize.text($0).prefix(60)) }
             draft.nutrition = nutrition
         }
         draft.flags = Array(flags.compactMap { flag in

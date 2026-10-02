@@ -82,8 +82,9 @@ export function createPremium({ config, cache }) {
       });
       if (!response.ok) throw new Error(`RevenueCat answered ${response.status}`);
       const body = await response.json();
-      const entitlement = body?.subscriber?.entitlements?.[config.REVENUECAT_ENTITLEMENT];
-      const premium = Boolean(entitlement && (!entitlement.expires_date || Date.parse(entitlement.expires_date) > Date.now()));
+      const active = (entitlement) => Boolean(entitlement && (!entitlement.expires_date || Date.parse(entitlement.expires_date) > Date.now()));
+      const premium = config.REVENUECAT_ENTITLEMENT.split(',').map((id) => id.trim())
+        .some((id) => active(body?.subscriber?.entitlements?.[id]));
       await cache.set(key, { premium }, 900);
       await cache.set(`${key}:stale`, { premium }, DAY);
       return premium;
@@ -115,6 +116,15 @@ export function createUsage({ db, config, now = () => new Date() }) {
       return row ? Number(row.used) : 0;
     },
 
+    /** What the app shows as "x left": the server's own counters, so two phones never disagree. */
+    async summary(deviceId, premium) {
+      const features = {};
+      for (const feature of Object.keys(FEATURES)) {
+        features[feature] = { used: await this.used(deviceId, feature), limit: limitOf(feature), period: FEATURES[feature].period };
+      }
+      return { premium: Boolean(premium), features };
+    },
+
     /** Checked before the work; only successful work is counted (failures never cost a free use). */
     async assertAllowed(deviceId, feature, premium) {
       if (premium) return;
@@ -143,7 +153,7 @@ export function createUsage({ db, config, now = () => new Date() }) {
 
 // ─── Recipe import (links, pasted text, OCR, transcripts) ───────────────────────────────────
 
-export function createImporter({ config, fetcher, ai, cache }) {
+export function createImporter({ config, fetcher, ai, cache, nutrition = { enrich: async (draft) => draft } }) {
   const complete = (recipe) => Boolean(recipe?.ingredients?.length && recipe?.steps?.length);
 
   async function extract({ text, kind, sourceURL }) {
@@ -230,9 +240,13 @@ export function createImporter({ config, fetcher, ai, cache }) {
 
     const caption = [shared.title, shared.caption].filter(Boolean).join('\n').trim();
     if (caption.length < 20) {
-      throw new HttpError(422, `${name} didn't share a caption for this post. If it's public, copy the caption and paste it in the Text tab.`);
+      throw new HttpError(422, `${name} didn't share a caption for this post. If it's public, copy the caption and paste it in the Text tab — or save or screen-record the video and add it in the Video tab.`, { code: 'no_caption' });
     }
-    const found = await extract({ text: caption.slice(0, 12_000), kind: 'caption', sourceURL: url });
+    const found = await extract({ text: caption.slice(0, 12_000), kind: 'caption', sourceURL: url }).catch((error) => {
+      // The recipe is often only spoken in the video: point to the Video tab instead of a dead end.
+      if (error.status === 422) throw new HttpError(422, `The ${name} ${platform === 'youtube' ? 'description' : 'caption'} doesn't include the recipe — it's probably spoken in the video. Save or screen-record the video and add it in the Video tab.`, { code: 'no_caption' });
+      throw error;
+    });
     return reply(found.recipe, {
       via: platform === 'youtube' ? 'description' : 'caption', notes: found.notes,
       sourceURL: url, sourceName: name, creator: shared.author, imageURL: shared.image,
@@ -243,21 +257,35 @@ export function createImporter({ config, fetcher, ai, cache }) {
     async importLink({ url, pageText }) {
       const canonical = canonicalize(url);
       const platform = platformOf(canonical);
-      const key = `import:v1:${sha256(`${canonical}|${pageText ? sha256(pageText) : ''}`)}`;
-      const { value } = await cache.wrap(key, 7 * DAY, () => fresh(canonical, platform, pageText));
+      const key = `import:v2:${sha256(`${canonical}|${pageText ? sha256(pageText) : ''}`)}`;
+      const { value } = await cache.wrap(key, 7 * DAY, async () => {
+        const result = await fresh(canonical, platform, pageText);
+        return { ...result, recipe: await nutrition.enrich(result.recipe) };
+      });
       return value;
+    },
+
+    async transcribe({ audio, mimeType }) {
+      if (!Buffer.isBuffer(audio) || audio.length < 1_000) throw new HttpError(400, 'Send the video\'s audio as audio/m4a.');
+      const text = await ai.transcribe({
+        audio, mimeType, model: config.TRANSCRIBE_MODEL,
+        prompt: 'A cooking video. Ingredients with amounts and units, then the method.',
+      });
+      if (text.length < 20) throw new HttpError(422, "We couldn't hear a recipe in that video.");
+      return { text: text.slice(0, 20_000) };
     },
 
     async extractText({ text, kind, sourceURL }) {
       const found = await extract({ text, kind, sourceURL });
-      return { recipe: toDraft(found.recipe, { sourceURL, method: kind === 'ocr' ? 'scan' : kind }), notes: found.notes.slice(0, 5) };
+      const recipe = await nutrition.enrich(toDraft(found.recipe, { sourceURL, method: kind === 'ocr' ? 'scan' : kind }));
+      return { recipe, notes: found.notes.slice(0, 5) };
     },
   };
 }
 
 // ─── AI helpers: swaps, Cook Now, planner ───────────────────────────────────────────────────
 
-export function createAssistant({ ai, cache }) {
+export function createAssistant({ ai, cache, nutrition = { enrich: async (draft) => draft } }) {
   const lower = (value) => String(value).toLowerCase();
   return {
     async substitutes(request) {
@@ -279,7 +307,7 @@ export function createAssistant({ ai, cache }) {
     },
 
     async cookNow(request) {
-      const key = `cooknow:v1:${sha256(JSON.stringify(request))}`;
+      const key = `cooknow:v2:${sha256(JSON.stringify(request))}`;
       const { value } = await cache.wrap(key, 6 * 3600, async () => {
         const result = await ai.json(tasks.cookNow({ ...request, country: request.country ? countryName(request.country) : null }));
         const avoid = new Set(request.avoidTitles.map(lower));
@@ -289,7 +317,8 @@ export function createAssistant({ ai, cache }) {
         })).filter(({ recipe }) => recipe.title && recipe.ingredients.length >= 2 && recipe.steps.length >= 1
           && !avoid.has(lower(recipe.title))
           && (!request.minutes || !recipe.totalMinutes || recipe.totalMinutes <= request.minutes + 5));
-        return { ideas: ideas.slice(0, 3).map((idea) => JSON.parse(JSON.stringify(idea))) };
+        const top = await Promise.all(ideas.slice(0, 3).map(async (idea) => ({ ...idea, recipe: await nutrition.enrich(idea.recipe) })));
+        return { ideas: top.map((idea) => JSON.parse(JSON.stringify(idea))) };
       });
       return value;
     },
@@ -349,7 +378,7 @@ export function createImages({ config, ai }) {
  * whichever instance holds the lock; each request reports the photos that exist so far.
  * Diets and allergies are applied in the app with FoodRules, because the catalogue is shared.
  */
-export function createDiscover({ ai, cache, config, images }) {
+export function createDiscover({ ai, cache, config, images, fetcher, nutrition = { enrich: async (draft) => draft } }) {
   const building = new Map(); // country → in-flight build in this process (avoids duplicate AI calls)
   const slug = (title) => title.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
   const words = (list, max, length) => [...new Set((list ?? []).map((item) => short(item, length)).filter(Boolean))].slice(0, max);
@@ -361,7 +390,7 @@ export function createDiscover({ ai, cache, config, images }) {
     ]);
     const cuisine = (kitchen.status === 'fulfilled' && short(kitchen.value.cuisine, 40)) || country;
     const seen = new Set();
-    const dishes = [];
+    let dishes = [];
     for (const group of groups) {
       if (group.status !== 'fulfilled') continue;
       for (const { recipe, region } of group.value.dishes ?? []) {
@@ -373,6 +402,11 @@ export function createDiscover({ ai, cache, config, images }) {
         if (where && !draft.tags.includes(where)) draft.tags = [where, ...draft.tags].slice(0, 20);
         dishes.push({ ...draft, remoteID: `local-${code.toLowerCase()}-${key}` });
       }
+    }
+    dishes = await knownDishes(dishes, country);
+    for (let i = 0; i < dishes.length; i += 3) {
+      const batch = await Promise.all(dishes.slice(i, i + 3).map((dish) => nutrition.enrich(dish)));
+      dishes.splice(i, batch.length, ...batch);
     }
     if (dishes.length < 6) {
       const failed = groups.find((group) => group.status === 'rejected');
@@ -388,15 +422,51 @@ export function createDiscover({ ai, cache, config, images }) {
     };
   }
 
+  /**
+   * Drops dishes no encyclopedia has heard of (a guard against invented dishes). Wikipedia is only a
+   * check, never a source: if it can't be reached, or would drop more than half (thin coverage for a
+   * region), every dish is kept.
+   */
+  async function knownDishes(dishes, country) {
+    if (!fetcher) return dishes;
+    const words = (text) => text.toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^\p{L}]+/u).filter((w) => w.length >= 3);
+    const checks = await Promise.all(dishes.map(async (dish) => {
+      const name = dish.title.replace(/\([^)]*\)/g, ' ').trim();
+      const key = `wiki:v2:${sha256(`${country}|${name.toLowerCase()}`)}`;
+      try {
+        const { value } = await cache.wrap(key, 90 * DAY, async () => {
+          const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=${encodeURIComponent(`${name} ${country} food`)}`;
+          const data = await fetcher.fetchJson(url);
+          const titles = (data?.query?.search ?? []).map((hit) => hit.title);
+          const wanted = words(name);
+          // Most of the dish's words must be in one article title ("Hyderabadi chicken biryani" ≈ "Hyderabadi biryani").
+          return { known: wanted.length > 0 && titles.some((title) => wanted.filter((w) => words(title).includes(w)).length / wanted.length >= 0.6) };
+        });
+        return value.known;
+      } catch {
+        return null; // unknown: don't judge
+      }
+    }));
+    if (checks.every((known) => known === null)) return dishes;
+    const kept = dishes.filter((_, index) => checks[index] !== false);
+    if (kept.length < dishes.length / 2) return dishes;
+    const dropped = dishes.length - kept.length;
+    if (dropped) log.info('local dishes not found on Wikipedia, dropped', { country, dropped });
+    return kept;
+  }
+
   async function paint(catalog) {
     if (!(await cache.lock(`discover:paint:${catalog.country}`, 20 * 60))) return; // another worker is on it
     for (const dish of catalog.dishes) {
       if (await images.existing(dish.title)) continue;
+      const failKey = `paintfail:${sha256(dish.title.toLowerCase())}`;
+      if (Number(await cache.get(failKey) ?? 0) >= 3) continue; // tried 3 times today; try again tomorrow
       try {
         await images.recipePhoto({ title: dish.title, description: [dish.summary, `${catalog.cuisine} home cooking`].filter(Boolean).join(' — ') });
       } catch (error) {
         log.warn('local photo failed', { country: catalog.country, title: dish.title, error: error.message });
         if (error.status === 503 || error.status === 501) break; // AI down or photos off: stop, retry on a later request
+        await cache.incr(failKey, DAY);
       }
     }
     await cache.del(`discover:paint:${catalog.country}`);
@@ -405,7 +475,7 @@ export function createDiscover({ ai, cache, config, images }) {
   return {
     async local({ country: code }) {
       const country = countryName(code);
-      const key = `discover:v1:${code}`;
+      const key = `discover:v2:${code}`;
       let value = await cache.get(key);
       if (!value) {
         if (!building.has(code)) {

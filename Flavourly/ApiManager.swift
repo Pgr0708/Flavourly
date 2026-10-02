@@ -188,8 +188,34 @@ enum Usage {
 
     static func used(_ feature: Feature) -> Int { ledger[weekKey]?[feature.rawValue] ?? 0 }
 
+    /// The server's own limits (they're configurable there); the built-in numbers are only a fallback.
+    private static var limits: [String: Int] {
+        get { (UserDefaults.standard.dictionary(forKey: "usageLimits") as? [String: Int]) ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "usageLimits") }
+    }
+
+    static func limit(_ feature: Feature) -> Int { limits[feature.rawValue] ?? feature.weeklyFree }
+
     static func remaining(_ feature: Feature) -> Int {
-        SettingsManager.shared.isPremium ? .max : max(0, feature.weeklyFree - used(feature))
+        SettingsManager.shared.isPremium ? .max : max(0, limit(feature) - used(feature))
+    }
+
+    /// Replaces the local guesses with the server's counters, so a reinstall, a failed reply or a
+    /// second phone never shows "2 left" when the server says 0. Called on launch and on foreground.
+    static func sync() async {
+        struct Empty: Encodable {}
+        struct Counter: Decodable { let used: Int; let limit: Int }
+        struct Reply: Decodable { let features: [String: Counter] }
+        guard let reply = try? await APIClient.shared.post(Apis.usage, Empty(), as: Reply.self) else { return }
+        var all = ledger
+        var newLimits = limits
+        for feature in Feature.allCases {
+            guard let counter = reply.features[feature.rawValue] else { continue }
+            all[weekKey, default: [:]][feature.rawValue] = counter.used
+            newLimits[feature.rawValue] = counter.limit
+        }
+        ledger = all
+        limits = newLimits
     }
 
     static func canUse(_ feature: Feature) -> Bool { remaining(feature) > 0 }
@@ -203,7 +229,7 @@ enum Usage {
     /// The server said the limit is reached; stop offering it this week.
     static func exhaust(_ feature: Feature) {
         var all = ledger
-        all[weekKey, default: [:]][feature.rawValue] = feature.weeklyFree
+        all[weekKey, default: [:]][feature.rawValue] = limit(feature)
         ledger = all
     }
 

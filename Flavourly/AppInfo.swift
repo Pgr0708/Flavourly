@@ -1,6 +1,6 @@
 //
 //  AppInfo.swift
-//  BillFixer
+//  Flavourly
 //
 //  Created by Minaxi on 16/08/26.
 //

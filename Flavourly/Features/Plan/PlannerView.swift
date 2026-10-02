@@ -323,6 +323,9 @@ struct PlannerView: View {
         let quick = styles.contains("Quick meals")
         options.weeknightMax = quick ? min(weeknightMax ?? 20, 20) : weeknightMax
         options.weekendMax = quick ? min(weekendMax ?? 30, 30) : weekendMax
+        let me = People.me()
+        if me.calorieTarget > 0 { options.dailyCalories = Double(me.calorieTarget) }
+        if me.proteinTarget > 0 { options.dailyProtein = Double(me.proteinTarget) }
         return options
     }
 
@@ -335,13 +338,23 @@ struct PlannerView: View {
         context.pantry = pantryFirst ? Kitchen.pantrySignals() : []
         context.cuisines = settings.customizationPreferences.choices["cuisines"] ?? []
         context.highProtein = highProtein
+        context.strictAllergens = true // nobody reviews an automatic plan dish by dish
         return context
     }
 
     private var pool: [Recipe] {
-        let all = Kitchen.candidates()
-        guard styles.contains("Low calorie") else { return all }
-        return all.filter { $0.calories == 0 || $0.calories <= 550 }
+        var all = Kitchen.candidates()
+        if styles.contains("Low calorie") { all = all.filter { $0.calories == 0 || $0.calories <= 550 } }
+        // Budget friendly = the cheaper half of recipes whose cost is known from the cook's own prices;
+        // recipes without a known cost stay in, so a new user still gets a full week.
+        if styles.contains("Budget friendly") {
+            let costs = all.compactMap { $0.costEstimate?.perServing }.sorted()
+            if costs.count >= 4 {
+                let median = costs[costs.count / 2]
+                all = all.filter { ($0.costEstimate?.perServing ?? 0) <= median }
+            }
+        }
+        return all
     }
 
     private func createPlan() async {

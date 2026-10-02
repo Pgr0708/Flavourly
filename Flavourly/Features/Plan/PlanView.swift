@@ -342,7 +342,7 @@ struct MealActionsSheet: View {
                         Label("Leftovers of \(source.title) (\((source.day ?? .now).formatted(.dateTime.weekday(.wide))))", systemImage: "arrow.uturn.backward")
                             .font(Theme.caption).foregroundStyle(Theme.pantry)
                     } else if meal.extraServings > 0 {
-                        Label("Cooks \(meal.extraServings) extra serving\(meal.extraServings == 1 ? "" : "s") for leftovers", systemImage: "takeoutbag.and.cup.and.straw")
+                        Label("Cooks \(meal.extraServings) extra servings for leftovers", systemImage: "takeoutbag.and.cup.and.straw")
                             .font(Theme.caption).foregroundStyle(Theme.pantry)
                     }
 
@@ -553,7 +553,7 @@ struct MoveMealView: View {
             }
             .scrollIndicators(.hidden)
             Picker("Meal", selection: $slot) {
-                ForEach(MealSlot.allCases) { Text($0.label).tag($0) }
+                ForEach(MealSlot.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
             }
             .pickerStyle(.segmented)
             Spacer()

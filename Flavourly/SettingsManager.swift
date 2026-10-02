@@ -58,6 +58,7 @@ final class SettingsManager: ObservableObject {
             if let data = try? JSONEncoder().encode(newValue) {
                 customizationPreferencesData = data
             }
+            RankContext.skillCap = Difficulty(skill: newValue.choices["skill"]?.first)
         }
     }
 

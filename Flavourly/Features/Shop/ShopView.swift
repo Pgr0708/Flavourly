@@ -53,7 +53,7 @@ struct ShopView: View {
                     Haptics.select()
                     withAnimation(Theme.snappy) { segment = item }
                 } label: {
-                    Text(item.rawValue)
+                    Text(LocalizedStringKey(item.rawValue))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(segment == item ? .white : Theme.ink2)
                         .frame(maxWidth: .infinity)
@@ -100,6 +100,7 @@ private struct GroceryListContent: View {
     @State private var showHave = false
     @State private var celebrate = false
     @State private var addError: String?
+    @State private var editing: GroceryEditTarget?
     @FocusState private var typing: Bool
 
     private var weekStart: Date {
@@ -229,6 +230,7 @@ private struct GroceryListContent: View {
         }
         .overlay { if celebrate { ConfettiView().allowsHitTesting(false) } }
         .sheet(item: $why) { line in WhyAmountSheet(line: line).environmentObject(settings) }
+        .sheet(item: $editing) { target in GroceryEditSheet(target: target, weekStart: weekStart).environmentObject(settings) }
         .onChange(of: done) { old, new in
             guard new == total, total > 0, old < new else { return }
             Haptics.success()
@@ -240,6 +242,7 @@ private struct GroceryListContent: View {
 
     private func progressCard(done: Int, total: Int) -> some View {
         let fraction = total == 0 ? 0 : Double(done) / Double(total)
+        let spent = rows.filter { ($0.isManual || $0.weekStart == weekStart) && $0.pricePaid > 0 }.reduce(0) { $0 + $1.pricePaid }
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(total == 0 ? "Nothing to buy" : "\(done) of \(total) in the basket").font(.system(size: 15, weight: .semibold))
@@ -256,6 +259,11 @@ private struct GroceryListContent: View {
             }
             .frame(height: 8)
             .animation(Theme.spring, value: fraction)
+            if spent > 0 {
+                Text("Spent so far: \(Kitchen.money(spent))").font(Theme.micro.weight(.semibold)).foregroundStyle(Theme.ink2)
+            } else {
+                Text("Long-press an item to add what you paid — recipes then show their real cost.").font(Theme.micro).foregroundStyle(Theme.muted)
+            }
         }
         .card(padding: 14)
         .accessibilityElement(children: .combine)
@@ -335,6 +343,7 @@ private struct GroceryListContent: View {
         }
         .padding(.vertical, 7)
         .contextMenu {
+            Button { editing = .line(line) } label: { Label("Add price paid", systemImage: "tag") }
             Button {
                 Kitchen.addPantry(name: line.name)
                 DropsManager.showSuccess(title: "Marked as in your pantry", subtitle: line.name)
@@ -374,6 +383,7 @@ private struct GroceryListContent: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button { editing = .manual(item) } label: { Label("Edit", systemImage: "pencil") }
             Button(role: .destructive) {
                 Haptics.destructive()
                 Kitchen.context.delete(item)
@@ -432,6 +442,132 @@ private struct GroceryListContent: View {
             text += "\n\(aisle.rawValue)\n" + items.joined(separator: "\n") + "\n"
         }
         return text
+    }
+}
+
+// MARK: - Edit an item / add the price paid
+
+enum GroceryEditTarget: Identifiable {
+    case manual(GroceryItem)
+    case line(GroceryLine)
+    var id: String {
+        switch self {
+        case .manual(let item): "manual-\(item.objectID)"
+        case .line(let line): "line-\(line.key)"
+        }
+    }
+}
+
+struct GroceryEditSheet: View {
+    let target: GroceryEditTarget
+    let weekStart: Date
+
+    @EnvironmentObject private var settings: SettingsManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var quantity = ""
+    @State private var unit = ""
+    @State private var price = ""
+    @State private var showErrors = false
+    @State private var didLoad = false
+
+    private let units = ["", "g", "kg", "ml", "l", "tsp", "tbsp", "cup", "oz", "lb", "piece", "can", "packet", "bunch", "bottle"]
+    private var isManual: Bool { if case .manual = target { true } else { false } }
+    private var nameCheck: FieldCheck { Validate.itemName(name) }
+    private var amountCheck: (value: Double?, message: String?) { Validate.quantity(quantity) }
+    private var priceCheck: (value: Double?, message: String?) { Validate.price(price) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if isManual {
+                    Section {
+                        VStack(alignment: .leading, spacing: 4) {
+                            TextField("Name", text: $name)
+                            if showErrors { FieldError(message: nameCheck.message) }
+                        }
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                TextField("Amount", text: $quantity).keyboardType(.decimalPad)
+                                if showErrors { FieldError(message: amountCheck.message) }
+                            }
+                            Picker("Unit", selection: $unit) {
+                                ForEach(units, id: \.self) { Text($0.isEmpty ? "—" : $0).tag($0) }
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                } else if case .line(let line) = target {
+                    Section {
+                        LabeledContent(line.name, value: Amount.text(quantity: line.toBuy, unit: line.unit, system: settings.unitSystem))
+                    }
+                }
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(Locale.current.currencySymbol ?? Kitchen.currency).foregroundStyle(Theme.muted)
+                            TextField("Price paid (optional)", text: $price).keyboardType(.decimalPad)
+                        }
+                        if showErrors { FieldError(message: priceCheck.message) }
+                    }
+                } footer: {
+                    Text("Your prices stay on your devices. Recipes show a cost per serving once most of their ingredients have a price.")
+                }
+            }
+            .navigationTitle(isManual ? "Edit item" : "Price paid")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).bold() }
+            }
+            .onAppear(perform: load)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func plain(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...2)).grouping(.never)) }
+
+    private func load() {
+        guard !didLoad else { return }
+        didLoad = true
+        switch target {
+        case .manual(let item):
+            name = item.name ?? ""
+            quantity = item.quantity > 0 ? plain(item.quantity) : ""
+            unit = item.unit ?? ""
+            price = item.pricePaid > 0 ? plain(item.pricePaid) : ""
+        case .line(let line):
+            let paid = Kitchen.groceryState(weekStart: weekStart)[line.key]?.pricePaid ?? 0
+            price = paid > 0 ? plain(paid) : ""
+        }
+    }
+
+    private func save() {
+        let problems = (isManual ? [nameCheck.message, amountCheck.message] : []) + [priceCheck.message]
+        if problems.contains(where: { $0 != nil }) {
+            withAnimation(Theme.snappy) { showErrors = true }
+            Haptics.error()
+            return
+        }
+        switch target {
+        case .manual(let item):
+            item.name = nameCheck.value
+            item.quantity = amountCheck.value ?? 0
+            item.unit = unit
+            item.aisle = Aisle.classify(nameCheck.value).rawValue
+            item.key = "manual|" + FoodText.key(nameCheck.value)
+            item.pricePaid = priceCheck.value ?? 0
+            if let paid = priceCheck.value { Kitchen.recordPrice(name: nameCheck.value, price: paid, quantity: amountCheck.value, unit: unit) }
+        case .line(let line):
+            let row = Kitchen.stateRow(key: line.key, weekStart: weekStart)
+            row.name = line.name
+            row.pricePaid = priceCheck.value ?? 0
+            if let paid = priceCheck.value { Kitchen.recordPrice(name: line.name, price: paid, quantity: line.toBuy, unit: line.unit) }
+        }
+        Kitchen.save()
+        Haptics.success()
+        DropsManager.showSuccess(title: priceCheck.value == nil ? "Saved" : "Price saved", subtitle: priceCheck.value.map { Kitchen.money($0) })
+        dismiss()
     }
 }
 

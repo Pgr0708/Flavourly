@@ -63,11 +63,23 @@ extension Recipe {
         ((collections as? Set<RecipeCollection>) ?? []).sorted { $0.sortIndex < $1.sortIndex }
     }
 
+    var stepTexts: [String] { sortedSteps.compactMap(\.text) }
+
+    /// Cost per serving from the cook's own grocery prices; nil until 70% of ingredients are priced.
+    var costEstimate: PriceBook.Estimate? {
+        PriceBook.estimate(ingredients: sortedIngredients.map { ($0.name ?? "", $0.quantity > 0 ? $0.quantity : nil, $0.unit ?? "") },
+                           servings: Int(servings), prices: Kitchen.prices(),
+                           isStaple: { GroceryBuilder.staples.contains(FoodText.key($0)) })
+    }
+    var level: Difficulty { RecipeTraits.difficulty(steps: stepTexts, ingredientCount: sortedIngredients.count, minutes: minutes) }
+    var equipment: Set<Equipment> { RecipeTraits.equipment(steps: stepTexts) }
+
     var facts: RecipeFacts {
         RecipeFacts(
             id: key, title: displayTitle, ingredientNames: checkLines, minutes: minutes, slots: slots,
             cuisine: cuisine, tags: tagList, rating: Int(rating), isFavorite: isFavorite, cookedCount: Int(cookedCount),
-            lastCooked: lastCookedAt, protein: protein, calories: calories, carbs: carbs
+            lastCooked: lastCookedAt, protein: protein, calories: calories, carbs: carbs,
+            difficulty: level, equipment: equipment
         )
     }
 
@@ -91,7 +103,8 @@ extension Recipe {
         draft.steps = sortedSteps.map { DraftStep(text: $0.text ?? "", timerSeconds: Int($0.timerSeconds), confidence: $0.confidence) }
         if hasNutrition {
             draft.nutrition = DraftNutrition(calories: calories, protein: protein, carbs: carbs, fat: fat, fiber: fiber,
-                                             sugar: sugar, sodium: sodium, matched: Int(nutritionMatched), total: Int(nutritionTotal))
+                                             sugar: sugar, sodium: sodium, matched: Int(nutritionMatched), total: Int(nutritionTotal),
+                                             source: nutritionSource)
         }
         draft.flags = reviewFlags
         draft.method = importMethod

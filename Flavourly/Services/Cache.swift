@@ -1,4 +1,5 @@
 import CryptoKit
+import Kingfisher
 import SwiftUI
 import UIKit
 
@@ -73,69 +74,49 @@ final class ResponseCache {
     private func file(_ key: String) -> URL { folder.appendingPathComponent(key + ".json") }
 }
 
-/// Recipe photos from the web: one download per URL (concurrent requests share it), kept in memory
-/// for smooth scrolling and on disk via URLCache for offline use.
-@MainActor
-final class ImageLoader {
-    static let shared = ImageLoader()
-
-    private let memory = NSCache<NSURL, UIImage>()
-    private var inflight: [URL: Task<UIImage?, Never>] = [:]
-
-    init() { memory.totalCostLimit = 80 << 20 }
-
-    func cached(_ url: URL) -> UIImage? { memory.object(forKey: url as NSURL) }
-
-    func image(for url: URL) async -> UIImage? {
-        if let hit = cached(url) { return hit }
-        if let running = inflight[url] { return await running.value }
-        let task = Task<UIImage?, Never> {
-            let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false,
-                  data.count < 15_000_000, let image = UIImage(data: data) else { return nil }
-            // Large photos are shrunk once so lists don't hold 12-megapixel bitmaps.
-            let longest = max(image.size.width, image.size.height)
-            guard longest > 1400 else { return image }
-            let scale = 1400 / longest
-            return await image.byPreparingThumbnail(ofSize: CGSize(width: image.size.width * scale, height: image.size.height * scale)) ?? image
-        }
-        inflight[url] = task
-        let image = await task.value
-        inflight[url] = nil
-        if let image { memory.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * 4)) }
-        return image
+/// Recipe photos via Kingfisher: one download per URL, memory + disk cache (30 days), downsampled
+/// so lists never hold 12-megapixel bitmaps, retried once on a flaky network.
+enum ImageCaching {
+    static func configure() {
+        let cache = ImageCache.default
+        cache.memoryStorage.config.totalCostLimit = 80 << 20
+        cache.diskStorage.config.sizeLimit = 300 << 20
+        cache.diskStorage.config.expiration = .days(30)
+        KingfisherManager.shared.downloader.downloadTimeout = 20
     }
 
-    func removeAll() { memory.removeAllObjects() }
+    static func removeAll() {
+        ImageCache.default.clearMemoryCache()
+        ImageCache.default.clearDiskCache()
+    }
 }
 
-/// AsyncImage replacement backed by `ImageLoader`.
+/// Remote photo with a placeholder while loading and a fallback view when it can't load.
 struct RemoteImage<Placeholder: View, Failure: View>: View {
     let url: URL
     @ViewBuilder var placeholder: () -> Placeholder
     @ViewBuilder var failure: () -> Failure
 
-    @State private var image: UIImage?
     @State private var failed = false
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         Group {
-            if let image = image ?? ImageLoader.shared.cached(url) {
-                Image(uiImage: image).resizable().scaledToFill().transition(.opacity)
-            } else if failed {
+            if failed {
                 failure()
             } else {
-                placeholder()
+                KFImage(url)
+                    .placeholder { placeholder() }
+                    .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 700, height: 700)))
+                    .scaleFactor(displayScale)
+                    .cacheOriginalImage(false)
+                    .retry(maxCount: 1, interval: .seconds(1))
+                    .onFailure { _ in failed = true }
+                    .fade(duration: 0.25)
+                    .resizable()
+                    .scaledToFill()
             }
         }
-        .task(id: url) {
-            guard ImageLoader.shared.cached(url) == nil else { return }
-            let loaded = await ImageLoader.shared.image(for: url)
-            withAnimation(Theme.gentle) {
-                image = loaded
-                failed = loaded == nil
-            }
-        }
+        .onChange(of: url) { _, _ in failed = false }
     }
 }

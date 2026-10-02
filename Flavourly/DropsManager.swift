@@ -57,7 +57,7 @@ enum DropsManager {
         Haptics.step()
         Drops.hideAll()
         var drop = Drop(
-            title: "\(title) · \(Int(clamped * 100))%",
+            title: "\(Lang.text(title)) · \(Int(clamped * 100))%",
             subtitle: subtitle,
             icon: ringImage(clamped),
             position: .top,
@@ -81,8 +81,8 @@ enum DropsManager {
 
     private static func show(title: String, subtitle: String?, symbol: String, tint: UIColor, seconds: TimeInterval) {
         var drop = Drop(
-            title: title,
-            subtitle: subtitle,
+            title: Lang.text(title),
+            subtitle: subtitle.map { Lang.text($0) },
             subtitleNumberOfLines: 2,
             icon: UIImage(systemName: symbol)?.withTintColor(tint, renderingMode: .alwaysOriginal),
             position: .top,

@@ -189,6 +189,8 @@ struct DomainCheck {
         shoppingAmounts()
         ingredientArt()
         halal()
+        newRules()
+        learning()
 
         if failures == 0 {
             print("DomainCheck passed")
@@ -199,6 +201,132 @@ struct DomainCheck {
     }
 
     // MARK: - Sanitising & validation (what users type, paste or share)
+
+    static func learning() {
+        // Prices: unit conversion, counts, mismatches, coverage, staples
+        let day = Date(timeIntervalSince1970: 1_790_000_000)
+        let onions = PricePoint(key: FoodText.key("onions"), name: "Onions", price: 60, quantity: 1, unit: "kg", currency: "INR", date: day)
+        check(abs((PriceBook.cost(250, unit: "g", at: onions) ?? 0) - 15) < 0.001, "250 g of onions at ₹60/kg = ₹15")
+        let eggs = PricePoint(key: FoodText.key("eggs"), name: "Eggs", price: 84, quantity: 12, unit: "", currency: "INR", date: day)
+        check(abs((PriceBook.cost(3, unit: "piece", at: eggs) ?? 0) - 21) < 0.001, "3 eggs at ₹84 a dozen = ₹21")
+        check(PriceBook.cost(2, unit: "cup", at: onions) == nil, "cups vs kg is never guessed")
+        let milk = PricePoint(key: FoodText.key("milk"), name: "Milk", price: 1.2, quantity: 1, unit: "l", currency: "USD", date: day)
+        check(abs((PriceBook.cost(250, unit: "ml", at: milk) ?? 0) - 0.3) < 0.001, "ml vs l")
+        let prices = [onions.key: onions, eggs.key: eggs]
+        let staple: (String) -> Bool = { GroceryBuilder.staples.contains(FoodText.key($0)) }
+        let omelette = PriceBook.estimate(ingredients: [("onions", 100, "g"), ("eggs", 4, ""), ("salt", 1, "tsp")], servings: 2, prices: prices, isStaple: staple)
+        check(omelette.map { abs($0.perServing - (6 + 28) / 2) < 0.001 && $0.total == 2 } == true, "per-serving cost, salt ignored: \(String(describing: omelette))")
+        let mostlyUnknown = PriceBook.estimate(ingredients: [("onions", 100, "g"), ("paneer", 200, "g"), ("cream", 100, "ml")], servings: 2, prices: prices, isStaple: staple)
+        check(mostlyUnknown == nil, "no cost until 70% of ingredients are priced")
+        check(Validate.price("45").value == 45 && Validate.price("3,49").value == 3.49 && Validate.price("").value == nil, "price parsing")
+        check(Validate.price("0").message != nil && Validate.price("abc").message != nil && Validate.price("99999999").message != nil, "bad prices")
+
+        // Taste: learned from cooking and ratings, fading with age
+        let paneer = RecipeFacts(id: "p", title: "Paneer tikka", ingredientNames: ["200 g paneer", "1 onion"], minutes: 30, slots: [.dinner], cuisine: "Indian")
+        let pasta = RecipeFacts(id: "s", title: "Spaghetti", ingredientNames: ["200 g spaghetti", "1 can tomatoes"], minutes: 20, slots: [.dinner], cuisine: "Italian")
+        let recent = Date(timeIntervalSince1970: 1_790_000_000)
+        var signals = [TasteProfile.Signal(facts: paneer, cookedCount: 4, rating: 5, isFavorite: true, lastCooked: recent),
+                       TasteProfile.Signal(facts: pasta, cookedCount: 1, rating: 1, isFavorite: false, lastCooked: recent)]
+        for i in 0..<4 {
+            signals.append(TasteProfile.Signal(facts: RecipeFacts(id: "x\(i)", title: "Dal \(i)", ingredientNames: ["100 g toor dal"], minutes: 30, slots: [.dinner], cuisine: "Indian"),
+                                               cookedCount: 2, rating: 4, isFavorite: false, lastCooked: recent))
+        }
+        let taste = TasteProfile.learn(from: signals, now: recent)
+        let newIndian = RecipeFacts(id: "n", title: "Paneer butter masala", ingredientNames: ["250 g paneer", "2 tomatoes"], minutes: 40, slots: [.dinner], cuisine: "Indian")
+        let newItalian = RecipeFacts(id: "i", title: "Penne", ingredientNames: ["200 g spaghetti"], minutes: 20, slots: [.dinner], cuisine: "Italian")
+        check(taste.score(newIndian).boost > 0.5 && taste.score(newItalian).boost < 0, "likes Indian/paneer, not that pasta: \(taste.score(newIndian).boost) / \(taste.score(newItalian).boost)")
+        check(taste.score(newIndian).reason != nil, "explains why")
+        let old = TasteProfile.learn(from: signals.map { var s = $0; s.lastCooked = recent.addingTimeInterval(-730 * 86_400); return s }, now: recent)
+        check(old.score(newIndian).boost < taste.score(newIndian).boost + 0.001, "two-year-old habits count less")
+        check(TasteProfile.learn(from: [], now: recent).isEmpty, "new cook: no learned bias")
+        var learned = RankContext()
+        learned.taste = taste
+        check(Recommender.rank([newItalian, newIndian], learned).first?.id == "n", "learned taste reorders ideas")
+
+        // Cook Now knows amounts: 100 g paneer doesn't cover a 400 g recipe
+        let tikka = RecipeFacts(id: "t", title: "Paneer tikka", ingredientNames: ["400 g paneer", "2 onions"], minutes: 30, slots: [.dinner])
+        var pantryContext = RankContext()
+        pantryContext.pantry = [PantrySignal(key: "paneer", name: "Paneer", daysLeft: nil, quantity: 100, unit: "g"),
+                                PantrySignal(key: "onion", name: "Onions", daysLeft: nil, quantity: 6, unit: "")]
+        let short = Recommender.evaluate(tikka, pantryContext)
+        check(short?.missing.contains { $0.lowercased().contains("paneer") } == true && short?.have == ["Onions"], "too little paneer counts as missing: \(String(describing: short?.missing))")
+        pantryContext.pantry[0].quantity = 0.5
+        pantryContext.pantry[0].unit = "kg"
+        check(Recommender.evaluate(tikka, pantryContext)?.missing.isEmpty == true, "0.5 kg covers 400 g")
+
+        // Planner: steer towards the day's calorie target
+        let light = RecipeFacts(id: "light", title: "Light", ingredientNames: ["1 egg"], minutes: 10, slots: [.dinner], protein: 25, calories: 650)
+        let heavy = RecipeFacts(id: "heavy", title: "Heavy", ingredientNames: ["1 egg"], minutes: 10, slots: [.dinner], rating: 5, protein: 25, calories: 1600)
+        var options = PlannerOptions()
+        options.leftoversForLunch = false
+        options.dailyCalories = 1900
+        let monday = Date(timeIntervalSince1970: 1_790_000_000)
+        let picks = Planner.fill(empty: [PlanSlot(day: monday, slot: .dinner)], existing: [:], recipes: [heavy, light], base: RankContext(), options: options)
+        check(picks.first?.recipeID == "light", "planner picks the meal that fits the day's calories")
+    }
+
+    static func newRules() {
+        // Barcodes (GTIN check digit)
+        check(Validate.barcode("8901063010321").value == "8901063010321", "valid EAN-13")
+        check(Validate.barcode("4006381 333931").value == "4006381333931", "spaces ignored")
+        check(Validate.barcode("96385074").value == "96385074", "valid EAN-8")
+        check(Validate.barcode("8901063010322").message != nil, "wrong check digit")
+        check(Validate.barcode("12345").message != nil && Validate.barcode("").message != nil, "too short / empty")
+        check(Validate.barcode("89010630103a1").message != nil && Validate.barcode("٨٩٠١٠٦٣٠١٠٣٢١").message != nil, "letters / non-ASCII digits")
+
+        // Packaged-food allergens (Open Food Facts tags become plain words)
+        var nutAllergy = FoodProfile()
+        nutAllergy.add(person: "Ravi", allergies: ["Tree nuts"], diets: [], dislikes: [], mild: false)
+        let nutella = ["milk", "nuts", "soy", "may contain gluten", "Sugar, palm oil, hazelnuts 13%, skimmed milk powder, cocoa, soy lecithin"]
+        check(FoodRules.check(ingredients: nutella, profile: nutAllergy).isBlocked, "scanned product with hazelnuts is blocked for a nut allergy")
+        var milkAllergy = FoodProfile()
+        milkAllergy.add(person: "Mia", allergies: ["Milk"], diets: [], dislikes: [], mild: false)
+        check(!FoodRules.check(ingredients: nutella, profile: milkAllergy).allergenIssues.isEmpty, "…and flagged for a milk allergy")
+
+        // Difficulty & equipment from the recipe itself
+        check(RecipeTraits.difficulty(steps: ["Toss everything together."], ingredientCount: 5, minutes: 10) == .easy, "simple salad is easy")
+        let bread = (1...12).map { "Step \($0): knead and proof the dough, then bake." }
+        check(RecipeTraits.difficulty(steps: bread, ingredientCount: 12, minutes: 180) == .hard, "long bread is challenging")
+        check(RecipeTraits.equipment(steps: ["Preheat the oven to 200°C.", "Roast for 30 minutes."]) == [.oven], "oven")
+        check(RecipeTraits.equipment(steps: ["Cook dal in a pressure cooker for 3 whistles.", "Temper in a pan."]).isSuperset(of: [.pressureCooker, .stovetop]), "pressure cooker + pan")
+        check(RecipeTraits.equipment(steps: ["Mix yogurt with fruit.", "Top with seeds."]) == [.noCook], "no cooking")
+        check(RecipeTraits.equipment(steps: ["Air fryer at 180°C for 12 minutes."]).contains(.airFryer), "air fryer")
+        check(!RecipeTraits.equipment(steps: ["Add panch phoron and potatoes to the bowl."]).contains(.stovetop), "'pan'/'pot' inside words don't count")
+        check(RecipeTraits.equipment(steps: ["Grilled the paneer, then fried the onions in two pans."]).contains(.stovetop), "word endings still count")
+        check(Difficulty(skill: "Just starting") == .easy && Difficulty(skill: "Very experienced") == nil, "skill mapping")
+
+        // Keto / low carb without nutrition
+        var keto = FoodProfile()
+        keto.add(person: "Asha", allergies: [], diets: ["Keto"], dislikes: [], mild: false)
+        check(FoodRules.check(ingredients: ["300 g spaghetti", "2 eggs"], profile: keto).needsCheck, "pasta flagged for keto when carbs unknown")
+        check(!FoodRules.check(ingredients: ["300 g cauliflower rice", "2 eggs"], profile: keto).needsCheck, "cauliflower rice is fine")
+        check(!FoodRules.check(ingredients: ["300 g spaghetti"], profile: keto, carbsPerServing: 15).needsCheck, "known low carbs win over the word")
+
+        // Ranking: strict allergens, skill, nutrition limits
+        var nuts = FoodProfile()
+        nuts.add(person: "Ravi", allergies: ["Tree nuts"], diets: [], dislikes: [], mild: false)
+        let pesto = RecipeFacts(id: "pesto", title: "Pesto pasta", ingredientNames: ["3 tbsp pesto", "200 g pasta"], minutes: 20, slots: [.dinner])
+        var context = RankContext()
+        context.profile = nuts
+        let relaxed = Recommender.evaluate(pesto, context)
+        context.strictAllergens = true
+        check(relaxed != nil || FoodRules.check(ingredients: pesto.ingredientNames, profile: nuts).isBlocked, "manual browsing still shows 'likely' dishes")
+        check(Recommender.evaluate(pesto, context) == nil, "automatic plans skip 'likely' allergens")
+
+        let easy = RecipeFacts(id: "e", title: "Easy", ingredientNames: ["2 eggs"], minutes: 10, slots: [.dinner], difficulty: .easy)
+        let hard = RecipeFacts(id: "h", title: "Hard", ingredientNames: ["2 eggs"], minutes: 10, slots: [.dinner], difficulty: .hard)
+        var beginner = RankContext()
+        beginner.skillCap = .easy
+        check(Recommender.rank([hard, easy], beginner).first?.id == "e", "beginners see easy recipes first")
+
+        var light = RankContext()
+        light.maxCalories = 500
+        light.minProtein = 20
+        let heavy = RecipeFacts(id: "x", title: "Heavy", ingredientNames: ["2 eggs"], minutes: 10, slots: [.dinner], protein: 30, calories: 900)
+        let lean = RecipeFacts(id: "y", title: "Lean", ingredientNames: ["2 eggs"], minutes: 10, slots: [.dinner], protein: 30, calories: 400)
+        let lowProtein = RecipeFacts(id: "z", title: "Low", ingredientNames: ["2 eggs"], minutes: 10, slots: [.dinner], protein: 5, calories: 300)
+        check(Recommender.rank([heavy, lean, lowProtein], light).map(\.id) == ["y"], "calorie cap and protein floor")
+    }
 
     static func halal() {
         check(Diet(label: "Halal") == .halal, "Halal label parses")

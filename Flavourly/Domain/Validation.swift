@@ -197,6 +197,28 @@ enum Validate {
 
     static func collectionName(_ raw: String) -> FieldCheck { required(raw, field: "Collection name", max: Limit.collection) }
 
+    /// Money someone paid: optional, positive, sane ("45", "3.49", "3,49").
+    static func price(_ raw: String) -> (value: Double?, message: String?) {
+        let cleaned = Sanitize.text(raw).filter { !$0.isWhitespace }
+        guard !cleaned.isEmpty else { return (nil, nil) }
+        guard let value = Sanitize.number(cleaned) else { return (nil, "Enter the price as a number, like 45 or 3.49") }
+        guard value > 0 else { return (nil, "The price has to be more than 0") }
+        guard value <= 1_000_000 else { return (nil, "That price looks too high") }
+        return (value, nil)
+    }
+
+    /// EAN-8, UPC-A (12), EAN-13 or GTIN-14 with a correct check digit; spaces and dashes are ignored.
+    static func barcode(_ raw: String) -> (value: String?, message: String?) {
+        let digits = raw.filter { !$0.isWhitespace && $0 != "-" }
+        if digits.isEmpty { return (nil, "Enter the numbers under the barcode") }
+        guard digits.allSatisfy(\.isASCII), digits.allSatisfy(\.isNumber) else { return (nil, "A barcode only has digits") }
+        guard [8, 12, 13, 14].contains(digits.count) else { return (nil, "Barcodes have 8, 12, 13 or 14 digits") }
+        let numbers = digits.compactMap(\.wholeNumberValue)
+        let body = numbers.dropLast().reversed().enumerated().reduce(0) { sum, item in sum + item.element * (item.offset % 2 == 0 ? 3 : 1) }
+        guard (10 - body % 10) % 10 == numbers.last else { return (nil, "That barcode doesn't add up — check the digits") }
+        return (digits, nil)
+    }
+
     /// Daily targets people type in Preferences and Household.
     enum Target {
         static let calories = 800...6000, protein = 10...400, carbs = 20...800, fat = 10...300

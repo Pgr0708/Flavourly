@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import HealthKit
 
@@ -38,6 +39,7 @@ final class HealthService {
     func write(_ logs: [MealLog]) {
         guard isConnected, !logs.isEmpty else { return }
         var samples: [HKObject] = []
+        var written: [MealLog] = []
         for log in logs where !log.syncedToHealth {
             let date = log.date ?? .now
             var parts: Set<HKSample> = []
@@ -52,16 +54,20 @@ final class HealthService {
             guard !parts.isEmpty, let food = HKCorrelationType.correlationType(forIdentifier: .food) else { continue }
             samples.append(HKCorrelation(type: food, start: date, end: date, objects: parts,
                                          metadata: [HKMetadataKeyFoodType: log.title ?? "Meal"]))
-            log.syncedToHealth = true
+            written.append(log)
         }
         guard !samples.isEmpty else { return }
+        let ids = written.map(\.objectID)
+        // Only marked as synced once HealthKit confirms; a failed write is retried next time.
         store.save(samples) { success, error in
-            if !success {
-                Task { @MainActor in
+            Task { @MainActor in
+                guard success else {
                     DropsManager.showError(title: "Apple Health didn't save", subtitle: error?.localizedDescription)
+                    return
                 }
+                for id in ids { (try? Kitchen.context.existingObject(with: id) as? MealLog)?.syncedToHealth = true }
+                Kitchen.save()
             }
         }
-        Kitchen.save()
     }
 }

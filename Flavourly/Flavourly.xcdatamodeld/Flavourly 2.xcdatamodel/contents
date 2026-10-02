@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24902" systemVersion="25F84" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="Recipe" representedClassName="Recipe" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="remoteID" optional="YES" attributeType="String"/>
+        <attribute name="title" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="summary" optional="YES" attributeType="String"/>
+        <attribute name="sourceURL" optional="YES" attributeType="String"/>
+        <attribute name="sourceName" optional="YES" attributeType="String"/>
+        <attribute name="creator" optional="YES" attributeType="String"/>
+        <attribute name="imageName" optional="YES" attributeType="String"/>
+        <attribute name="imageURL" optional="YES" attributeType="String"/>
+        <attribute name="imageData" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="servings" optional="YES" attributeType="Integer 16" defaultValueString="2" usesScalarValueType="YES"/>
+        <attribute name="prepMinutes" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="cookMinutes" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalMinutes" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="difficulty" optional="YES" attributeType="String"/>
+        <attribute name="cuisine" optional="YES" attributeType="String"/>
+        <attribute name="mealTypes" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="tags" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="rating" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="isFavorite" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isArchived" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isCurated" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isSaved" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="cookedCount" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="lastCookedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="calories" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="protein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="carbs" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="fat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="fiber" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="sugar" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="sodium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="nutritionMatched" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="nutritionSource" optional="YES" attributeType="String"/>
+        <attribute name="nutritionTotal" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="needsReview" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="reviewNotes" optional="YES" attributeType="String"/>
+        <attribute name="importMethod" optional="YES" attributeType="String"/>
+        <relationship name="ingredients" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="RecipeIngredient" inverseName="recipe" inverseEntity="RecipeIngredient"/>
+        <relationship name="steps" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="RecipeStep" inverseName="recipe" inverseEntity="RecipeStep"/>
+        <relationship name="collections" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="RecipeCollection" inverseName="recipes" inverseEntity="RecipeCollection"/>
+        <relationship name="plannedMeals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PlannedMeal" inverseName="recipe" inverseEntity="PlannedMeal"/>
+        <relationship name="logs" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="MealLog" inverseName="recipe" inverseEntity="MealLog"/>
+    </entity>
+    <entity name="RecipeIngredient" representedClassName="RecipeIngredient" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="position" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="quantity" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="quantityMax" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="unit" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="name" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="originalText" optional="YES" attributeType="String"/>
+        <attribute name="aisle" optional="YES" attributeType="String"/>
+        <attribute name="isOptional" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="confidence" optional="YES" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
+        <attribute name="substitutedFrom" optional="YES" attributeType="String"/>
+        <relationship name="recipe" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Recipe" inverseName="ingredients" inverseEntity="Recipe"/>
+    </entity>
+    <entity name="RecipeStep" representedClassName="RecipeStep" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="position" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="text" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="timerSeconds" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="confidence" optional="YES" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
+        <relationship name="recipe" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Recipe" inverseName="steps" inverseEntity="Recipe"/>
+    </entity>
+    <entity name="RecipeCollection" representedClassName="RecipeCollection" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="symbol" optional="YES" attributeType="String" defaultValueString="folder.fill"/>
+        <attribute name="colorHex" optional="YES" attributeType="String" defaultValueString="#155634"/>
+        <attribute name="sortIndex" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="recipes" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Recipe" inverseName="collections" inverseEntity="Recipe"/>
+    </entity>
+    <entity name="PlannedMeal" representedClassName="PlannedMeal" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="day" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="slot" optional="YES" attributeType="String" defaultValueString="dinner"/>
+        <attribute name="servings" optional="YES" attributeType="Integer 16" defaultValueString="2" usesScalarValueType="YES"/>
+        <attribute name="extraServings" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="isLocked" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="status" optional="YES" attributeType="String" defaultValueString="planned"/>
+        <attribute name="isLeftover" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="customTitle" optional="YES" attributeType="String"/>
+        <attribute name="eaters" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="aiReason" optional="YES" attributeType="String"/>
+        <attribute name="createdByAI" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sortIndex" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="recipe" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Recipe" inverseName="plannedMeals" inverseEntity="Recipe"/>
+        <relationship name="leftoverSource" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PlannedMeal" inverseName="leftoverMeals" inverseEntity="PlannedMeal"/>
+        <relationship name="leftoverMeals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PlannedMeal" inverseName="leftoverSource" inverseEntity="PlannedMeal"/>
+    </entity>
+    <entity name="GroceryItem" representedClassName="GroceryItem" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="key" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="name" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="quantity" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="unit" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="aisle" optional="YES" attributeType="String"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="isChecked" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isManual" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isHidden" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="haveQuantity" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="weekStart" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="PantryItem" representedClassName="PantryItem" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="quantity" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="unit" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="location" optional="YES" attributeType="String" defaultValueString="cupboard"/>
+        <attribute name="expiresAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="openedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="isLow" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="HouseholdMember" representedClassName="HouseholdMember" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="name" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="colorHex" optional="YES" attributeType="String" defaultValueString="#C7631F"/>
+        <attribute name="ageGroup" optional="YES" attributeType="String" defaultValueString="adult"/>
+        <attribute name="portion" optional="YES" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
+        <attribute name="diets" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="allergies" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="dislikes" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="goals" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="calorieTarget" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="proteinTarget" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="spiceLevel" optional="YES" attributeType="String" defaultValueString="medium"/>
+        <attribute name="eatsBreakfast" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="eatsLunch" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="eatsDinner" optional="YES" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="sortIndex" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="MealLog" representedClassName="MealLog" syncable="YES" codeGenerationType="class">
+        <attribute name="uuid" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="slot" optional="YES" attributeType="String" defaultValueString="dinner"/>
+        <attribute name="title" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="servings" optional="YES" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
+        <attribute name="calories" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="protein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="carbs" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="fat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="memberID" optional="YES" attributeType="String" defaultValueString="me"/>
+        <attribute name="syncedToHealth" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="recipe" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Recipe" inverseName="logs" inverseEntity="Recipe"/>
+    </entity>
+</model>

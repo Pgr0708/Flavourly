@@ -8,7 +8,7 @@ import mysql from 'mysql2/promise';
 import { build } from '../src/build.js';
 import { loadConfig } from '../src/config.js';
 import { migrate } from '../src/db.js';
-import { startFakeOpenAI, startFakeRevenueCat } from './fake-openai.js';
+import { fakeFoodApis, startFakeOpenAI, startFakeRevenueCat } from './fake-openai.js';
 
 export const DB = {
   host: process.env.TEST_DB_HOST ?? '127.0.0.1',
@@ -48,7 +48,8 @@ export async function setup({ env = {}, fetcher, now, redisUrl = '', database } 
     TRUST_PROXY: 'false',
     ...env,
   });
-  const deps = build(config, { fetcher, now });
+  const food = fakeFoodApis();
+  const deps = build(config, { fetcher, now, http: food.http });
   await migrate(deps.db);
   if (redisUrl) await waitFor(() => deps.cache.backend === 'redis');
   const server = await new Promise((resolve) => {
@@ -94,7 +95,7 @@ export async function setup({ env = {}, fetcher, now, redisUrl = '', database } 
     await fs.rm(imageDir, { recursive: true, force: true });
   }
 
-  return { config, deps, ai, base, api, register, teardown, database: name, admin };
+  return { config, deps, ai, food, base, api, register, teardown, database: name, admin };
 }
 
 export async function waitFor(check, timeoutMs = 5_000) {
@@ -126,6 +127,7 @@ export function stubFetcher(routes) {
     },
     async fetchJson(url) {
       const route = respond(url);
+      if (typeof route === 'function') return route(url);
       return typeof route === 'string' ? JSON.parse(route) : route.json ?? route;
     },
   };

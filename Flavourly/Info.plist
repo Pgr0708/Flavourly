@@ -8,7 +8,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Scan recipe pages from your cookbooks so Flavourly can turn them into recipes.</string>
+	<string>Scan recipe pages from your cookbooks and product barcodes for your pantry.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Save the meals you log (calories, protein, carbohydrates and fat) to Apple Health.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

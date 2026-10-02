@@ -15,6 +15,7 @@ before(async () => {
     'https://www.instagram.com/reel/pasta/': await fixture('instagram.html'),
     'https://www.instagram.com/p/curry/': await fixture('instagram-link.html'),
     'https://mariaskitchen.example/curry': await fixture('creator-site.html'),
+    'https://www.instagram.com/reel/talky/': '<html><head><meta property="og:description" content="NO_RECIPE so good, recipe in the video! #dinner #easy"></head></html>',
     'https://www.instagram.com/p/private/': '<html><head></head><body>Log in</body></html>',
     'https://www.tiktok.com/oembed': { json: { title: 'Garlic noodles\nIngredients\n200 g noodles\n4 cloves garlic\nMethod\n1. Boil the noodles for 5 min', author_name: 'noodlequeen', thumbnail_url: 'https://p16.example/t.jpg' } },
     'https://www.youtube.com/oembed': { json: { title: 'Easy Shakshuka', author_name: 'Chef Lee', thumbnail_url: 'https://i.ytimg.example/s.jpg' } },
@@ -95,7 +96,14 @@ describe('social posts (public captions only)', () => {
   it('private or caption-less posts get a clear way forward', async () => {
     const res = await importLink('https://www.instagram.com/p/private/');
     assert.equal(res.status, 422);
-    assert.match(res.body.error, /Instagram didn't share a caption.*Text tab/);
+    assert.match(res.body.error, /Instagram didn't share a caption.*Text tab.*Video tab/);
+    assert.equal(res.body.code, 'no_caption');
+  });
+  it('a caption without a recipe points to the Video tab (the recipe is probably spoken)', async () => {
+    const res = await importLink('https://www.instagram.com/reel/talky/');
+    assert.equal(res.status, 422);
+    assert.equal(res.body.code, 'no_caption');
+    assert.match(res.body.error, /spoken in the video.*Video tab/);
   });
 });
 

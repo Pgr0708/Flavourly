@@ -109,6 +109,7 @@ struct RecipeDetailView: View {
                                style: .dark, tint: recipe.isFavorite ? Color(hex: "#FF7AA2") : .white) {
                         recipe.isFavorite.toggle()
                         Kitchen.save()
+                        Kitchen.relearnTaste()
                         recipe.isFavorite ? Haptics.success() : Haptics.tick()
                     }
                 }
@@ -172,6 +173,7 @@ struct RecipeDetailView: View {
                     let target = Kitchen.adopt(recipe)
                     target.rating = Int16(value)
                     Kitchen.save()
+                    Kitchen.relearnTaste()
                 }
                 Text(recipe.cookedCount > 0
                      ? "Cooked \(recipe.cookedCount)×\(recipe.lastCookedAt.map { ", last on \($0.formatted(.dateTime.day().month()))" } ?? "")"
@@ -184,6 +186,11 @@ struct RecipeDetailView: View {
                 meta("person.2", plural(Int(recipe.servings), "serving"))
             }
             .padding(.top, 2)
+            if let cost = recipe.costEstimate {
+                Label("≈ \(Kitchen.money(cost.perServing)) a serving · from your prices for \(cost.priced) of \(cost.total) ingredients",
+                      systemImage: "tag.fill")
+                    .font(Theme.micro.weight(.semibold)).foregroundStyle(Theme.pantry)
+            }
         }
     }
 
@@ -296,7 +303,7 @@ struct RecipeDetailView: View {
                 Text("servings").font(Theme.caption).foregroundStyle(Theme.ink2)
                 Spacer()
                 Picker("Units", selection: Binding(get: { settings.unitSystem }, set: { settings.unitSystem = $0; Haptics.select() })) {
-                    ForEach(UnitSystem.allCases) { Text($0.label).tag($0) }
+                    ForEach(UnitSystem.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 128)
@@ -500,7 +507,7 @@ struct StarRating: View {
                         .symbolEffect(.bounce, value: rating == value)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(value) star\(value == 1 ? "" : "s")")
+                .accessibilityLabel("\(value) stars")
             }
         }
     }
@@ -568,7 +575,11 @@ struct NutritionPanel: View {
                     .padding(12)
                     .background(Theme.checkSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 } else {
-                    Text("Estimates from the recipe's ingredients — not medical advice.").font(Theme.micro).foregroundStyle(Theme.muted)
+                    let verified = recipe.nutritionSource?.contains("USDA") == true || recipe.nutritionSource?.contains("Spoonacular") == true
+                    Label(verified ? "Calculated from \(recipe.nutritionSource ?? "") data — not medical advice."
+                                   : "\(recipe.nutritionSource ?? "Estimate") from the recipe's ingredients — not medical advice.",
+                          systemImage: verified ? "checkmark.seal.fill" : "sparkles")
+                        .font(Theme.micro).foregroundStyle(verified ? Theme.green : Theme.muted)
                 }
 
                 PrimaryButton(title: "Log 1 serving to today", systemImage: "plus", tone: .outline, height: 46) {

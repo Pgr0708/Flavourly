@@ -208,11 +208,11 @@ struct ImportView: View {
             if !settings.isPremium {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("\(remaining) of \(Feature.importRecipe.weeklyFree) free link imports left this week").font(Theme.micro.weight(.semibold))
+                        Text("\(remaining) of \(Usage.limit(.importRecipe)) free link imports left this week").font(Theme.micro.weight(.semibold))
                         Spacer()
                         Button("Unlimited") { showPaywall = true }.font(Theme.micro.weight(.bold)).tint(Theme.premiumDeep)
                     }
-                    ProgressView(value: Double(remaining), total: Double(Feature.importRecipe.weeklyFree)).tint(Theme.premium)
+                    ProgressView(value: Double(remaining), total: Double(Usage.limit(.importRecipe))).tint(Theme.premium)
                     Text("Photo, text and video imports are always free.").font(Theme.micro).foregroundStyle(Theme.muted)
                 }
                 .padding(12)
@@ -444,7 +444,7 @@ struct ImportView: View {
         guard Usage.canUse(.importRecipe) else {
             Haptics.warning()
             phase = .failed(.init(title: "Free imports used",
-                                  message: "You've used this week's \(Feature.importRecipe.weeklyFree) free link imports.", partial: nil, isLimit: true))
+                                  message: "You've used this week's \(Usage.limit(.importRecipe)) free link imports.", partial: nil, isLimit: true))
             return
         }
         let raw = link
@@ -576,7 +576,7 @@ private struct ImportingPanel: View {
                             }
                         }
                         .frame(width: 22)
-                        Text(stage.label)
+                        Text(LocalizedStringKey(stage.label))
                             .font(.system(size: 15, weight: importer.stage == stage ? .semibold : .regular))
                             .foregroundStyle(importer.stage >= stage ? Theme.ink : Theme.muted)
                     }

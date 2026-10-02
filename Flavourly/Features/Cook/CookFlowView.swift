@@ -140,7 +140,7 @@ struct CookFlowView: View {
                         .frame(width: 22, height: 22)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(clock(left)).font(Theme.rounded(17).monospacedDigit()).contentTransition(.numericText(countsDown: true))
-                            Text(timer.label).font(.system(size: 10, weight: .medium)).lineLimit(1)
+                            Text(LocalizedStringKey(timer.label)).font(.system(size: 10, weight: .medium)).lineLimit(1)
                         }
                         Button {
                             cancel(timer)

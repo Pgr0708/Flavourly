@@ -20,7 +20,7 @@ function rateLimit({ cache, name, limit, windowSeconds, key, message }) {
   };
 }
 
-export function createApp({ config, db, cache, devices, premium, usage, importer, assistant, images, discover }) {
+export function createApp({ config, db, cache, devices, premium, usage, importer, assistant, images, discover, nutrition }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.TRUST_PROXY === 'false' ? false : config.TRUST_PROXY);
@@ -86,8 +86,20 @@ export function createApp({ config, db, cache, devices, premium, usage, importer
   v1.post('/ai/substitutes', validate(schemas.substitutes), metered('aiSwap', (req) => assistant.substitutes(req.body)));
   v1.post('/ai/cook-now', validate(schemas.cookNow), metered('aiIdeas', (req) => assistant.cookNow(req.body)));
   v1.post('/ai/plan', validate(schemas.plan), metered('aiPlan', (req) => assistant.plan(req.body)));
+  v1.post('/usage', json((req) => usage.summary(req.device.id, req.premium)));
+  // Verified nutrition (USDA, then Spoonacular). Cached per food, so it's free to call after edits.
+  v1.post('/nutrition', validate(schemas.nutrition), json(async (req) => ({
+    nutrition: await nutrition.forLines(req.body.lines, req.body.servings, { minCoverage: 0.5 }),
+  })));
   // Shared, cached catalogue: free for everyone, no credit used.
   v1.post('/discover', validate(schemas.discover), json((req) => discover.local(req.body)));
+  // Premium: full-length listening for a video the user picked (audio only, max TRANSCRIBE_MAX_MB).
+  // Not metered per use; a per-device daily cap keeps the OpenAI bill bounded.
+  v1.post('/ai/transcribe',
+    (req, _res, next) => next(req.premium ? undefined : new HttpError(403, 'Listening to full videos is part of Premium.', { code: 'premium' })),
+    rateLimit({ cache, name: 'transcribe', limit: config.TRANSCRIBE_PER_DAY, windowSeconds: 86_400, key: (req) => req.device.id, message: "You've listened to a lot of videos today. Try again tomorrow." }),
+    express.raw({ type: ['audio/*', 'video/mp4'], limit: `${config.TRANSCRIBE_MAX_MB}mb` }),
+    json((req) => importer.transcribe({ audio: req.body, mimeType: req.get('Content-Type') ?? '' })));
   v1.post('/images/recipe', validate(schemas.image), metered('aiImage', (req) => images.recipePhoto(req.body)));
 
   app.use('/v1', v1);

@@ -142,6 +142,21 @@ enum AIService {
         return picks
     }
 
+    // MARK: Nutrition
+
+    /// Verified per-serving nutrition (USDA FoodData Central, then Spoonacular), or nil when too few lines match.
+    static func nutrition(lines: [String], servings: Int) async throws -> DraftNutrition? {
+        struct Body: Encodable { let lines: [String]; let servings: Int }
+        struct Reply: Codable { let nutrition: DraftNutrition? }
+        let body = Body(lines: Array(lines.map { String($0.prefix(Validate.Limit.ingredient)) }.prefix(Validate.Limit.ingredients)),
+                        servings: min(100, max(1, servings)))
+        let key = ResponseCache.key(Apis.nutrition, body)
+        if let hit = ResponseCache.shared.value(Reply.self, for: key) { return hit.nutrition }
+        let reply = try await APIClient.shared.post(Apis.nutrition, body, as: Reply.self)
+        ResponseCache.shared.store(reply, for: key, ttl: 30 * 86_400)
+        return reply.nutrition
+    }
+
     // MARK: Images
 
     static func recipeImageURL(title: String, summary: String?) async throws -> String {

@@ -126,6 +126,10 @@ export const schemas = {
     description: text(300).optional().nullable(),
   }),
   discover: z.object({ country: countryCode }),
+  nutrition: z.object({
+    lines: z.array(text(200, { min: 1 })).min(1, 'needs at least one ingredient').max(100, 'can have at most 100 ingredients'),
+    servings: z.number().int().min(1).max(100).default(2),
+  }),
   empty: z.object({}).passthrough(),
 };
 

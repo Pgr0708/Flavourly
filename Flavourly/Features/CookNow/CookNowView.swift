@@ -212,7 +212,7 @@ struct CookNowView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("FOR").font(Theme.label).tracking(0.6).foregroundStyle(Theme.muted)
                 Picker("Meal", selection: $answers.slot) {
-                    ForEach(MealSlot.allCases) { Text($0.label).tag($0) }
+                    ForEach(MealSlot.allCases) { Text(LocalizedStringKey($0.label)).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: answers.slot) { _, slot in
@@ -488,7 +488,7 @@ struct CookNowResults: View {
                 .font(Theme.micro).foregroundStyle(Theme.muted)
             ForEach(ideas) { idea in AIIdeaCard(idea: idea) }
             if hidden > 0 {
-                Label("\(hidden) idea\(hidden == 1 ? "" : "s") hidden — not safe for someone eating", systemImage: "eye.slash")
+                Label("\(hidden) ideas hidden — not safe for someone eating", systemImage: "eye.slash")
                     .font(Theme.micro).foregroundStyle(Theme.muted)
             }
             if Usage.canUse(.aiIdeas) {

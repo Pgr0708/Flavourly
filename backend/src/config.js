@@ -34,10 +34,20 @@ const schema = z.object({
   OPENAI_TIMEOUT_MS: int(45_000, 1_000, 180_000),
 
   YOUTUBE_API_KEY: z.string().default(''),
+  // Premium video listening: the app uploads the video's audio only (never a third-party download).
+  // gpt-4o-mini-transcribe ≈ $0.003/min; whisper-1 / gpt-4o-transcribe ≈ $0.006/min.
+  TRANSCRIBE_MODEL: z.string().min(1).default('gpt-4o-mini-transcribe'),
+  TRANSCRIBE_MAX_MB: int(24, 1, 25),
+  TRANSCRIBE_PER_DAY: int(30, 1, 10_000),
+  // Verified nutrition. USDA key is free (api.data.gov); DEMO_KEY works but allows ~30 requests/hour.
+  USDA_API_KEY: z.string().min(1).default('DEMO_KEY'),
+  // Optional: Spoonacular fills in ingredients USDA can't match (free plan = 150 points/day).
+  SPOONACULAR_API_KEY: z.string().default(''),
   FETCH_USER_AGENT: z.string().min(1).default('Mozilla/5.0 (compatible; FlavourlyBot/1.0; +https://flavourly.dakshyaminfotech.store)'),
 
   REVENUECAT_SECRET_KEY: z.string().default(''),
-  REVENUECAT_ENTITLEMENT: z.string().min(1).default('premium'),
+  // Comma-separated: any active one counts as Premium. Must match the app (pro, lifetime).
+  REVENUECAT_ENTITLEMENT: z.string().min(1).default('pro,lifetime'),
   REVENUECAT_BASE_URL: z.string().url().default('https://api.revenuecat.com/v1'),
 
   IMAGE_GENERATION: flag,

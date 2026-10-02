@@ -131,7 +131,7 @@ describe('AI endpoints', () => {
     assert.equal(recipe.ingredients.length, 3);
     assert.equal(recipe.steps.length, 2);
     assert.equal(recipe.steps[0].timerSeconds, 300);
-    assert.deepEqual(Object.keys(recipe.nutrition).sort(), ['calories', 'carbs', 'fat', 'fiber', 'matched', 'protein', 'sodium', 'sugar', 'total']);
+    assert.deepEqual(Object.keys(recipe.nutrition).sort(), ['calories', 'carbs', 'fat', 'fiber', 'matched', 'protein', 'sodium', 'source', 'sugar', 'total']);
   });
   it('extract says clearly when there is no recipe', async () => {
     const res = await t.api('/v1/ai/extract', { text: 'NO_RECIPE just a nice day at the beach with friends' }, { token });
@@ -215,6 +215,16 @@ describe('free limits and Premium', () => {
     const token = await t.register();
     const swap = (user, ingredient) => t.api('/v1/ai/substitutes', { ingredient, recipeTitle: 'Premium test' }, { token, headers: { 'X-RC-App-User': user } });
     for (let i = 0; i < 4; i += 1) assert.equal((await swap('premium-user-1', `${i + 1} cups milk`)).status, 200);
+    const lifetime = await t.register();
+    for (let i = 0; i < 4; i += 1) {
+      const res = await t.api('/v1/ai/substitutes', { ingredient: `${i + 1} tbsp butter`, recipeTitle: 'Lifetime' }, { token: lifetime, headers: { 'X-RC-App-User': 'lifetime-user' } });
+      assert.equal(res.status, 200, 'the lifetime entitlement counts as Premium too');
+    }
+    const other = await t.register();
+    const otherSwap = (n) => t.api('/v1/ai/substitutes', { ingredient: `${n} cups oat milk`, recipeTitle: 'Other' }, { token: other, headers: { 'X-RC-App-User': 'other-user' } });
+    assert.equal((await otherSwap(1)).status, 200);
+    assert.equal((await otherSwap(2)).status, 200);
+    assert.equal((await otherSwap(3)).status, 429, 'an entitlement the app does not sell is not Premium');
     const lapsed = await t.register();
     const lapsedSwap = (ingredient) => t.api('/v1/ai/substitutes', { ingredient, recipeTitle: 'Lapsed' }, { token: lapsed, headers: { 'X-RC-App-User': 'expired-user' } });
     assert.equal((await lapsedSwap('1 cup milk')).status, 200);
@@ -294,7 +304,7 @@ describe('local food (discover)', () => {
     const res = await t.api('/v1/discover', { country: 'NP' }, { token });
     assert.equal(res.status, 502);
     assert.match(res.body.error, /Nepal/);
-    assert.equal(await t.deps.cache.get('discover:v1:NP'), null);
+    assert.equal(await t.deps.cache.get('discover:v2:NP'), null);
   });
 
   it('Cook Now asks for dishes from the cook\'s country', async () => {

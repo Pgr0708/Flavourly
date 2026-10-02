@@ -66,17 +66,7 @@ enum Kitchen {
             step.confidence = item.confidence
             step.recipe = recipe
         }
-        if let nutrition = draft.nutrition {
-            recipe.calories = nutrition.calories
-            recipe.protein = nutrition.protein
-            recipe.carbs = nutrition.carbs
-            recipe.fat = nutrition.fat
-            recipe.fiber = nutrition.fiber
-            recipe.sugar = nutrition.sugar
-            recipe.sodium = nutrition.sodium
-            recipe.nutritionMatched = Int16(clamping: nutrition.matched)
-            recipe.nutritionTotal = Int16(clamping: nutrition.total)
-        }
+        if let nutrition = draft.nutrition { apply(nutrition, to: recipe) }
         recipe.needsReview = !draft.flags.isEmpty
         recipe.reviewNotes = draft.flags.isEmpty ? nil : (try? JSONEncoder().encode(draft.flags)).flatMap { String(data: $0, encoding: .utf8) }
         if commit, target == nil { save() }
@@ -137,7 +127,52 @@ enum Kitchen {
             let stamp = Date.now.formatted(date: .abbreviated, time: .omitted)
             target.notes = [target.notes, "\(stamp): \(note)"].compactMap { $0 }.joined(separator: "\n")
         }
+        let used = usePantry(for: target, servings: planned.map { Int($0.cookServings) } ?? Int(target.servings))
         save()
+        relearnTaste()
+        if !used.isEmpty {
+            let list = used.prefix(3).joined(separator: ", ") + (used.count > 3 ? "…" : "")
+            DropsManager.showInfo(title: "Pantry updated", subtitle: String(format: Lang.text("Used %@"), list))
+        }
+    }
+
+    /// Re-learns what this cook likes from everything they've cooked, rated or favourited.
+    static func relearnTaste() {
+        let mine = CoreDataManager.shared.fetch(Recipe.self, NSPredicate(format: "cookedCount > 0 OR rating > 0 OR isFavorite == YES"))
+        RankContext.taste = TasteProfile.learn(from: mine.map {
+            TasteProfile.Signal(facts: $0.facts, cookedCount: Int($0.cookedCount), rating: Int($0.rating), isFavorite: $0.isFavorite, lastCooked: $0.lastCookedAt)
+        })
+    }
+
+    /// Takes what a cook used out of the pantry (same unit family only; nothing is guessed across
+    /// g↔cups). Items that run out are kept and marked "running low" so they can go on the list.
+    @discardableResult
+    static func usePantry(for recipe: Recipe, servings: Int) -> [String] {
+        let stock = CoreDataManager.shared.fetch(PantryItem.self)
+        guard !stock.isEmpty else { return [] }
+        let factor = Double(max(1, servings)) / Double(max(1, recipe.servings))
+        var used: [String] = []
+        for ingredient in recipe.sortedIngredients where ingredient.quantity > 0 && !ingredient.isOptional {
+            let key = FoodText.key(ingredient.name ?? "")
+            guard !key.isEmpty, let item = stock.first(where: { Recommender.matches(key, FoodText.key($0.name ?? "")) }), item.quantity > 0 else { continue }
+            let need = ingredient.quantity * factor
+            let needUnit = ingredient.unit ?? ""
+            let haveUnit = item.unit ?? ""
+            let amount: Double?
+            if let a = Units.toBase(need, unit: needUnit), let b = Units.toBase(1, unit: haveUnit), Units.family(needUnit) == Units.family(haveUnit) {
+                amount = a / b
+            } else if needUnit == haveUnit || (["", "piece"].contains(needUnit) && ["", "piece"].contains(haveUnit)) {
+                amount = need
+            } else {
+                amount = nil
+            }
+            guard let amount else { continue }
+            item.quantity = max(0, item.quantity - amount)
+            if item.quantity < 0.001 { item.isLow = true }
+            item.updatedAt = .now
+            used.append(item.displayName.lowercased())
+        }
+        return used
     }
 
     static func recipe(forKey key: String) -> Recipe? {
@@ -154,6 +189,36 @@ enum Kitchen {
         let mine = CoreDataManager.shared.fetch(Recipe.self, NSPredicate(format: "isSaved == YES AND isArchived == NO"))
         let saved = Set(mine.compactMap(\.remoteID))
         return mine + Library.shared.recipes.filter { !saved.contains($0.remoteID ?? "") && LocalFood.shared.allows($0) }
+    }
+
+    static func apply(_ nutrition: DraftNutrition, to recipe: Recipe) {
+        recipe.calories = nutrition.calories
+        recipe.protein = nutrition.protein
+        recipe.carbs = nutrition.carbs
+        recipe.fat = nutrition.fat
+        recipe.fiber = nutrition.fiber
+        recipe.sugar = nutrition.sugar
+        recipe.sodium = nutrition.sodium
+        recipe.nutritionMatched = Int16(clamping: nutrition.matched)
+        recipe.nutritionTotal = Int16(clamping: nutrition.total)
+        recipe.nutritionSource = nutrition.source
+    }
+
+    /// After ingredients change (editor, swaps), recalculates from USDA/Spoonacular on the server.
+    /// If the new list can't be verified, the old numbers stay but are labelled as outdated.
+    static func refreshNutrition(_ recipe: Recipe) async {
+        let lines = recipe.sortedIngredients.map { $0.originalText ?? $0.name ?? "" }.filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return }
+        do {
+            if let fresh = try await AIService.nutrition(lines: lines, servings: Int(recipe.servings)) {
+                apply(fresh, to: recipe)
+            } else if recipe.calories > 0 {
+                recipe.nutritionSource = "Estimate from before your edits"
+            }
+            save()
+        } catch {
+            // Offline: keep the old numbers; the next edit tries again.
+        }
     }
 
     // MARK: - Plan
@@ -346,6 +411,47 @@ enum Kitchen {
         save()
     }
 
+    // MARK: - Prices (budget)
+
+    static var currency: String { Locale.current.currency?.identifier ?? "USD" }
+
+    /// Saves what the cook paid; the newest price per food is what recipe costs use.
+    static func recordPrice(name: String, price: Double, quantity: Double?, unit: String) {
+        let key = FoodText.key(name)
+        guard !key.isEmpty, price > 0 else { return }
+        let entry = PriceEntry(context: context)
+        entry.uuid = UUID()
+        entry.key = key
+        entry.name = String(Sanitize.text(name).prefix(Validate.Limit.itemName))
+        entry.price = price
+        entry.quantity = (quantity ?? 0) > 0 ? quantity! : 1
+        entry.unit = (quantity ?? 0) > 0 ? unit : "piece"
+        entry.currency = currency
+        entry.date = .now
+        save()
+        priceCache = nil
+    }
+
+    private static var priceCache: (at: Date, prices: [String: PricePoint])?
+
+    /// Latest price per food in the cook's currency (a minute's cache: list filters ask for every recipe).
+    static func prices() -> [String: PricePoint] {
+        if let cache = priceCache, Date.now.timeIntervalSince(cache.at) < 60 { return cache.prices }
+        let rows = CoreDataManager.shared.fetch(PriceEntry.self, NSPredicate(format: "currency == %@", currency),
+                                                sort: [NSSortDescriptor(key: "date", ascending: true)])
+        var latest: [String: PricePoint] = [:]
+        for row in rows {
+            latest[row.key ?? ""] = PricePoint(key: row.key ?? "", name: row.name ?? "", price: row.price, quantity: row.quantity,
+                                               unit: row.unit ?? "", currency: row.currency ?? "", date: row.date ?? .distantPast)
+        }
+        priceCache = (.now, latest)
+        return latest
+    }
+
+    static func money(_ value: Double) -> String {
+        value.formatted(.currency(code: currency).precision(.fractionLength(value < 10 ? 2 : 0)))
+    }
+
     // MARK: - Pantry
 
     @discardableResult
@@ -374,7 +480,8 @@ enum Kitchen {
 
     static func pantrySignals() -> [PantrySignal] {
         CoreDataManager.shared.fetch(PantryItem.self).map {
-            PantrySignal(key: FoodText.key($0.name ?? ""), name: $0.displayName, daysLeft: $0.daysLeft)
+            PantrySignal(key: FoodText.key($0.name ?? ""), name: $0.displayName, daysLeft: $0.daysLeft,
+                         quantity: $0.quantity, unit: $0.unit ?? "")
         }
     }
 

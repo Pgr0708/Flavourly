@@ -141,9 +141,15 @@ final class LocalFood: ObservableObject {
         let cookedTitles = Set(cooked.map { $0.displayTitle.lowercased() })
         let pool = (dishes.isEmpty ? Library.shared.recipes.filter(allows) : dishes).filter { recipe in
             recipe.cookedCount == 0 && !cookedIDs.contains(recipe.remoteID ?? "") && !cookedTitles.contains(recipe.displayTitle.lowercased())
-                && !FoodRules.check(ingredients: recipe.checkLines, profile: profile).isBlocked
+                && Self.fits(recipe, profile)
         }
         return Array(pool.sorted { Self.mix($0.key, seed) < Self.mix($1.key, seed) }.prefix(count))
+    }
+
+    /// Shown without anyone asking for it, so even a "likely" allergen keeps a dish out.
+    static func fits(_ recipe: Recipe, _ profile: FoodProfile) -> Bool {
+        let check = FoodRules.check(ingredients: recipe.checkLines, profile: profile, carbsPerServing: recipe.carbs)
+        return !check.isBlocked && check.allergenIssues.isEmpty && !check.hasDislike
     }
 
     /// Stable shuffle (String.hashValue changes every launch).

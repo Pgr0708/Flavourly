@@ -1,4 +1,5 @@
 import CoreData
+internal import Combine
 import Foundation
 
 /// All writes go through here so rules (leftovers, locks, cooked counts, grocery state) live in one place.
@@ -82,16 +83,20 @@ enum Kitchen {
         guard !isFillingPhotos else { return }
         isFillingPhotos = true
         defer { isFillingPhotos = false }
-        let bare = CoreDataManager.shared.fetch(Recipe.self, NSPredicate(format: "isSaved == YES AND imageURL == nil AND imageData == nil AND imageName == nil"))
+        let saved = CoreDataManager.shared.fetch(Recipe.self, NSPredicate(format: "isSaved == YES AND imageURL == nil AND imageData == nil AND imageName == nil"))
+        // Built-in recipes without a photo too (they live in memory; found photos are remembered by Library).
+        let bare = saved + Library.shared.recipes.filter { $0.imageURL == nil && $0.imageData == nil && Library.needsBetterPhoto($0.imageName) }
         var tried = UserDefaults.standard.dictionary(forKey: "photoLookups") as? [String: Double] ?? [:]
         let now = Date.now.timeIntervalSince1970
-        for recipe in bare.prefix(limit) {
+        for recipe in bare.prefix(limit + 40) {
             let title = recipe.displayTitle
             guard title != "Untitled recipe", now - (tried[title.lowercased()] ?? 0) > 3 * 86_400 else { continue }
             tried[title.lowercased()] = now
-            guard let url = try? await AIService.freePhotoURL(title: title), !recipe.isDeleted, !recipe.hasPhoto else { continue }
+            guard let url = try? await AIService.freePhotoURL(title: title), !recipe.isDeleted, recipe.imageURL == nil, recipe.imageData == nil else { continue }
+            recipe.objectWillChange.send()
             recipe.imageURL = url
-            save()
+            if !recipe.isSaved { recipe.imageName = nil } // a sharp web photo replaces a tiny bundled one
+            if recipe.isSaved { save() } else { Library.foundPhotos[title.lowercased()] = url }
         }
         UserDefaults.standard.set(tried.filter { now - $0.value < 3 * 86_400 }, forKey: "photoLookups")
     }
@@ -141,6 +146,7 @@ enum Kitchen {
 
     /// Counts a cook once and ticks off the matching planned meal (today's, when none is given).
     static func recordCooked(_ recipe: Recipe, rating: Int? = nil, note: String? = nil, meal: PlannedMeal? = nil) {
+        Personalizer.shared.finishedCooking(recipe)
         let target = adopt(recipe)
         let planned = meal ?? meals(from: .now, days: 1).first { $0.recipe == target && $0.mealStatus == .planned && !$0.isLeftover }
         planned?.status = MealStatus.cooked.rawValue
@@ -322,6 +328,7 @@ enum Kitchen {
     }
 
     static func setStatus(_ meal: PlannedMeal, _ status: MealStatus) {
+        if status == .skipped, let key = meal.recipe?.key { Personalizer.shared.record(.skip, recipe: key) }
         let wasCooked = meal.mealStatus == .cooked
         meal.status = status.rawValue
         if status == .cooked, !wasCooked, !meal.isLeftover, let recipe = meal.recipe {
@@ -353,6 +360,7 @@ enum Kitchen {
     static func toggleLock(_ meal: PlannedMeal) {
         meal.isLocked.toggle()
         save()
+        if meal.isLocked, let key = meal.recipe?.key { Personalizer.shared.record(.lock, recipe: key) }
     }
 
     /// Changes who eats a meal; servings follow portions unless the user set them by hand.

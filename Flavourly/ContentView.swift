@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var showCookNow = false
     @State private var sheet: RootSheet?
     @State private var review: ReviewItem?
+    @State private var showPaywall = false
     @State private var homePath = NavigationPath()
     @State private var cookbookPath = NavigationPath()
     @State private var planPath = NavigationPath()
@@ -91,6 +92,11 @@ struct ContentView: View {
         .sheet(isPresented: $showCookNow) {
             CookNowView().environmentObject(settings)
         }
+        .onReceive(CookNowModel.shared.$openRequested) { requested in
+            guard requested else { return }
+            CookNowModel.shared.openRequested = false
+            showCookNow = true
+        }
         .fullScreenCover(item: $review) { item in
             ImportReviewView(draft: item.draft, imageData: item.imageData) { _ in review = nil }
                 .environmentObject(settings)
@@ -114,6 +120,8 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .switchTab)) { note in
             if let target = note.object as? AppTab { tab = target }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showPaywall)) { _ in showPaywall = true }
+        .sheet(isPresented: $showPaywall) { PaywallScreenView().environmentObject(settings) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 processSharedInbox()
@@ -123,7 +131,11 @@ struct ContentView: View {
         .task {
             RankContext.skillCap = Difficulty(skill: settings.customizationPreferences.choices["skill"]?.first)
             Kitchen.relearnTaste()
-            Task { await Kitchen.fillMissingPhotos() }
+            Personalizer.shared.prepare()
+            Task {
+                await LocalFood.shared.refreshPlace() // asks for location once, then follows it
+                await Kitchen.fillMissingPhotos()
+            }
             processSharedInbox()
             Task { await Usage.sync() }
             NotificationService.shared.reschedule()
@@ -216,6 +228,12 @@ private struct ReadyToast: View {
 extension Notification.Name {
     static let openReview = Notification.Name("flavourly.openReview")
     static let switchTab = Notification.Name("flavourly.switchTab")
+    /// Any screen can ask for the Premium sheet (e.g. a free cook reaching an AI feature).
+    static let showPaywall = Notification.Name("flavourly.showPaywall")
+}
+
+enum Paywall {
+    @MainActor static func show() { NotificationCenter.default.post(name: .showPaywall, object: nil) }
 }
 
 // MARK: - Routes
@@ -267,6 +285,10 @@ enum Route: Hashable {
     case member(NSManagedObjectID?)
     case pantry, cookFromPantry
     case plannerSetup
+    case worldKitchens
+    case country(String)
+    case region(String, String)
+    case learned
 }
 
 struct RouteView: View {
@@ -302,6 +324,10 @@ struct RouteView: View {
         case .pantry: PantryView()
         case .cookFromPantry: CookFromPantryView()
         case .plannerSetup: PlannerView()
+        case .worldKitchens: WorldKitchensView()
+        case .country(let code): CountryKitchenView(code: code)
+        case .region(let code, let name): RegionKitchenView(code: code, region: name)
+        case .learned: LearnedView()
         }
     }
 }

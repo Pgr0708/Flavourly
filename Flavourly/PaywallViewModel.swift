@@ -17,10 +17,10 @@ enum PaywallPlan: String, CaseIterable, Identifiable {
     }
     var previewPrice: String {
         switch self {
-        case .weekly: return "$4.99"
-        case .monthly: return "$9.99"
+        case .weekly: return "$2.99"
+        case .monthly: return "$6.99"
         case .yearly: return "$39.99"
-        case .lifetime: return "$89.99"
+        case .lifetime: return "$99.99"
         }
     }
     var packageType: PackageType {

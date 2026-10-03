@@ -100,6 +100,6 @@ describe('two instances, one MySQL + one Redis', () => {
     const { migrate } = await import('../src/db.js');
     await Promise.all([migrate(a.deps.db), migrate(b.deps.db), migrate(a.deps.db)]);
     const [rows] = await a.deps.db.query('SELECT version FROM schema_migrations');
-    assert.deepEqual(rows.map((r) => r.version), ['001_init.sql']);
+    assert.deepEqual(rows.map((r) => r.version).sort(), ['001_init.sql', '002_dishes.sql', '003_variations.sql'], 'each migration applied exactly once');
   });
 });

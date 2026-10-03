@@ -18,6 +18,7 @@ struct RecipeDetailView: View {
     @State private var notes = ""
     @State private var generatingImage = false
     @State private var didLoad = false
+    @State private var openedRoute: Route?
     /// Swaps chosen "just for this cook" (ingredient → replacement line, "" = left out). The saved recipe is untouched.
     @State private var swaps: [UUID: String] = [:]
 
@@ -37,6 +38,7 @@ struct RecipeDetailView: View {
                 hero
                 VStack(alignment: .leading, spacing: 0) {
                     titleBlock
+                    MakeItMyWayButton(recipe: recipe) { openedRoute = $0 }.padding(.top, 14)
                     safetyBanner.padding(.top, 14)
                     if recipe.needsReview && !recipe.reviewFlags.isEmpty { reviewCard.padding(.top, 12) }
                     tabs.padding(.top, 16)
@@ -50,6 +52,10 @@ struct RecipeDetailView: View {
                     }
                     .padding(.top, 12)
                     .animation(Theme.gentle, value: section)
+                    // Under the ingredients and steps: videos of the dish being made.
+                    if section <= 1 { RecipeVideosRow(title: recipe.displayTitle).padding(.top, 24) }
+                    // Last: other cooks' own versions of this dish, from the same region first.
+                    NearbyVersionsSection(title: recipe.displayTitle) { openedRoute = $0 }.padding(.top, 24)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
@@ -63,6 +69,7 @@ struct RecipeDetailView: View {
         .canvasBackground()
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom) { bottomBar }
+        .navigationDestination(item: $openedRoute) { RouteView(route: $0) }
         .sheet(item: $swapTarget) { ingredient in
             SubstituteSheet(recipe: recipe, ingredient: ingredient, swaps: $swaps, scale: scale).environmentObject(settings)
         }
@@ -85,6 +92,7 @@ struct RecipeDetailView: View {
         .onAppear {
             guard !didLoad else { return }
             didLoad = true
+            Personalizer.shared.record(.view, recipe: recipe.key)
             servings = max(1, Int(recipe.servings))
             notes = recipe.notes ?? ""
         }
@@ -473,7 +481,15 @@ struct RecipeDetailView: View {
         Task {
             defer { generatingImage = false }
             do {
-                let url = try await AIService.recipeImageURL(title: recipe.displayTitle, summary: recipe.summary)
+                // Free photo first; an AI photo only for Premium when nothing free matches.
+                let free = try? await AIService.freePhotoURL(title: recipe.displayTitle)
+                if free == nil && !settings.isPremium {
+                    DropsManager.showInfo(title: "No free photo yet", subtitle: "AI photos are part of Premium.")
+                    Paywall.show()
+                    return
+                }
+                let url: String
+                if let free { url = free } else { url = try await AIService.recipeImageURL(title: recipe.displayTitle, summary: recipe.summary) }
                 let target = Kitchen.adopt(recipe)
                 target.imageURL = url
                 Kitchen.save()

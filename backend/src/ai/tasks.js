@@ -152,7 +152,8 @@ export const tasks = {
       `Hard rules for everyone eating: ${rulesText(rules)}`,
       minutes ? `Total time (prep + cook) must be ${minutes} minutes or less.` : 'There is no time limit.',
       `Use the pantry items first; at most ${okToBuy} ingredient(s) may be missing from the pantry (salt, pepper, water and cooking oil don't count).`,
-      `Amounts are for ${servings} serving(s). Steps are clear and in order, with timerSeconds when a step has a duration.`,
+      `Amounts are for ${servings} serving(s). Steps are in order, with timerSeconds when a step has a duration.`,
+      DETAILED,
       'nutrition is an honest estimate per serving (matched = total = number of ingredients). reason: one short sentence on why it fits.',
       country ? `The cook lives in ${country}: suggest dishes people there cook at home, with ingredients sold there, unless the craving clearly asks for another cuisine.` : '',
       'Never repeat a title listed in avoidTitles.',
@@ -160,7 +161,7 @@ export const tasks = {
     ].filter(Boolean).join('\n'),
     user: JSON.stringify({ craving: craving || 'anything', pantry, avoidTitles }),
     temperature: 0.7,
-    maxTokens: 5_000,
+    maxTokens: 9_000,
   }),
 
   plan: ({ slots, candidates, preferences, rules }) => ({
@@ -204,6 +205,12 @@ export const tasks = {
 // ─── Local food catalogue (one per country, shared by every user, cached for weeks) ─────────
 
 /** Seven small parallel requests (3 dishes each) answer faster than one big one and rarely overlap. */
+/** Shared by every prompt that writes a recipe from scratch: complete lists and detailed steps, not summaries. */
+const DETAILED = [
+  'Ingredients: list EVERY ingredient — oil or ghee, salt, sugar, water, each spice and whole spice, the tempering, garnish and anything served with it. Never "spices to taste" or "as needed" without an amount. Everyday dishes need about 8–14 lines, complex or festive dishes 15–25. When a dish has parts (dough, filling, gravy, tempering), put the part in the ingredient note.',
+  'Steps: as detailed as a good cookbook — usually 8–16 steps. One action per step, with the heat level, the pan or tool, how long, and how it should look, smell or feel when ready (e.g. "until the onions turn deep golden, 8–10 minutes"). Include prep (soaking, marinating, chopping), resting and serving. Never squash several stages into one step.',
+].join('\n');
+
 export const LOCAL_GROUPS = [
   { focus: 'breakfast dishes', count: 3 },
   { focus: 'vegetarian everyday mains', count: 3 },
@@ -215,7 +222,10 @@ export const LOCAL_GROUPS = [
 ];
 
 export const localTasks = {
-  dishes: ({ country, focus, count }) => ({
+  dishes: ({ country, region, focus, count }) => {
+    // With a region ("Gujarat", "Tuscany"): mostly that region's own food, plus what the whole country cooks.
+    const place = region ? `${region}, ${country}` : country;
+    return {
     name: 'local_dishes',
     schema: {
       type: 'object',
@@ -229,22 +239,56 @@ export const localTasks = {
       },
     },
     system: [
-      `You are a home cook from ${country} writing authentic, well-tested recipes for a cooking app used by people living in ${country}.`,
-      `Give exactly ${count} different, well-known ${focus} that families in ${country} really cook at home.`,
+      `You are a home cook from ${place} writing authentic, well-tested recipes for a cooking app used by people living in ${place}.`,
+      `Give exactly ${count} different, well-known ${focus} that families in ${place} really cook at home.`,
+      region ? `Mostly ${region}'s own specialities; at most one dish that everyone in ${country} cooks.` : '',
       `Only dishes that belong to ${country}'s own food culture — never dishes from other countries, even popular ones.`,
       'title: the name locals use, with a short English description in brackets only when the name is not self-explanatory.',
       `cuisine: the cuisine name (e.g. "Indian", "Mexican"). region: the region or community the dish comes from, or null when it is eaten everywhere in ${country}.`,
       `Ingredients: what shops in ${country} sell, metric amounts, for the stated servings. Fill quantity, unit and name for every line.`,
-      'Steps: clear, complete and in order, with timerSeconds when a step has a duration. Times must be realistic.',
+      DETAILED,
+      'timerSeconds when a step has a duration. Times must be realistic.',
       'summary: one appetising sentence. tags: up to 5 (include "Vegetarian" or "Vegan" when true, and the region).',
       'nutrition: an honest estimate per serving (matched = total = number of ingredients). Write in English.',
-    ].join('\n'),
-    user: JSON.stringify({ country, focus, count }),
+    ].filter(Boolean).join('\n'),
+    user: JSON.stringify({ country, region: region ?? null, focus, count }),
     temperature: 0.6,
-    maxTokens: 4_500,
+    maxTokens: 9_000,
+    };
+  },
+
+  /** A country's famous regional cuisines, for the world explorer ("Italy" → Sicily, Tuscany, Emilia-Romagna…). */
+  regions: ({ country }) => ({
+    name: 'regional_cuisines',
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['regions'],
+      properties: {
+        regions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['name', 'about', 'signature'],
+            properties: { name: { type: 'string' }, about: { type: 'string' }, signature: { type: 'string' } },
+          },
+        },
+      },
+    },
+    system: [
+      `List the 6 to 10 most famous regional cuisines of ${country}: states, provinces, regions or cities whose home cooking is distinct and well known.`,
+      'name: the place name in English as people search it (e.g. "Punjab", "Sicily", "Oaxaca", "Sichuan"). Never the whole country.',
+      'about: one short sentence on what makes its food special (ingredients, flavours), under 90 characters.',
+      'signature: the single most famous dish from there, by the name locals use (e.g. "Sarson da saag", "Arancini").',
+      `If ${country} has no distinct regional cuisines, return fewer (or none). Write in English.`,
+    ].join('\n'),
+    user: JSON.stringify({ country }),
+    temperature: 0.3,
+    maxTokens: 1_200,
   }),
 
-  kitchen: ({ country }) => ({
+  kitchen: ({ country, region }) => ({
     name: 'local_kitchen',
     schema: {
       type: 'object',
@@ -257,14 +301,95 @@ export const localTasks = {
       },
     },
     system: [
-      `Describe a typical home kitchen in ${country}.`,
+      `Describe a typical home kitchen in ${region ? `${region}, ${country}` : country}.`,
       'cuisine: the cuisine name in English (e.g. "Indian").',
       'staples: 24 everyday ingredients most homes there keep (grains, pulses, vegetables, dairy, proteins, spices, sauces), short names in English, local names in brackets when common.',
       'cravings: 10 short things people there crave or search for when deciding what to cook (dish types or famous dishes), 1–3 words each.',
     ].join('\n'),
-    user: JSON.stringify({ country }),
+    user: JSON.stringify({ country, region: region ?? null }),
     temperature: 0.3,
     maxTokens: 900,
+  }),
+};
+
+// ─── Dish search (shared library: each dish is written once, then reused by everyone) ─────────
+
+export const dishTasks = {
+  /** The names people search for in one country, for autocomplete ("alu" → "Aloo Puri · Gujarat"). */
+  names: ({ country }) => ({
+    name: 'dish_names',
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['dishes'],
+      properties: {
+        dishes: {
+          type: 'array',
+          items: { type: 'object', additionalProperties: false, required: ['name', 'region'], properties: { name: { type: 'string' }, region: nullable('string') } },
+        },
+      },
+    },
+    system: [
+      `List about 200 dishes people in ${country} cook and search for most: everyday home food, breakfasts, breads, rice dishes,`,
+      'street food, snacks, festival food and sweets, including the well-known specialities of every state, province or region.',
+      'name: as locals spell it in English letters (e.g. "Aloo Puri", "Sev Tameta", "Undhiyu"), no descriptions.',
+      'region: the state or region it is most associated with, or null when it is eaten everywhere. No duplicates.',
+    ].join('\n'),
+    user: JSON.stringify({ country }),
+    temperature: 0.3,
+    maxTokens: 6_000,
+  }),
+
+  /** One authentic recipe for a dish someone searched for; found = false for names that aren't real dishes. */
+  recipe: ({ name, country, region }) => ({
+    name: 'dish_recipe',
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['found', 'recipe'],
+      properties: { found: { type: 'boolean' }, recipe },
+    },
+    system: [
+      'You write authentic, well-tested home recipes for a cooking app.',
+      `The cook searched for a dish by name${country ? ` and lives in ${region ? `${region}, ` : ''}${country}` : ''}.`,
+      'If the name is not a real dish people cook (gibberish, a brand, not food, or unsafe), return found = false with an empty recipe.',
+      'Otherwise found = true and write the most common home version of exactly that dish, as people in its place of origin cook it.',
+      'title: the dish name as commonly written, with a short English description in brackets only when the name is not self-explanatory.',
+      'cuisine: its cuisine (e.g. "Gujarati" → "Indian"). Ingredients with metric amounts for the stated servings; fill quantity, unit and name.',
+      DETAILED,
+      'timerSeconds when a step has a duration. Realistic times.',
+      'tags: up to 5 (include "Vegetarian" or "Vegan" when true, and the region). nutrition: an honest estimate per serving. Write in English.',
+    ].join('\n'),
+    user: JSON.stringify({ dish: name }),
+    temperature: 0.4,
+    maxTokens: 6_000,
+  }),
+};
+
+/** Premium "make it my way": a full new recipe from a dish plus the cook's change. */
+export const variationTasks = {
+  make: ({ base, change, country, region }) => ({
+    name: 'recipe_variation',
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['ok', 'recipe'],
+      properties: { ok: { type: 'boolean' }, recipe },
+    },
+    system: [
+      'You adapt recipes for a home cooking app. You get a dish and the change the cook wants.',
+      `The cook lives in ${region ? `${region}, ` : ''}${country ?? 'an unknown country'}.`,
+      'If the change is not about food or cooking, is unsafe (raw or undercooked risky food, non-food items, harmful amounts) or makes no sense, return ok = false with an empty recipe.',
+      'Otherwise ok = true and write the complete new recipe with the change fully worked in: swap, add or remove ingredients, and rewrite every affected step, time and amount.',
+      'title: a short, appealing new dish name that shows the change (e.g. "Paneer Aloo Puri", "Air-Fryer Samosa", "Vegan Butter Chicken"). Never reuse the original title unchanged.',
+      'summary: one sentence on what is different from the original. Metric amounts; fill quantity, unit and name.',
+      DETAILED,
+      'timerSeconds when a step has a duration. tags: up to 5, include "Vegetarian" or "Vegan" when true. nutrition: an honest estimate per serving. Write in English.',
+      DATA_ONLY,
+    ].join('\n'),
+    user: JSON.stringify({ dish: base, change }),
+    temperature: 0.5,
+    maxTokens: 6_000,
   }),
 };
 

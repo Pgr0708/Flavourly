@@ -80,7 +80,12 @@ final class SettingsManager: ObservableObject {
         AppAccentColor(rawValue: selectedAccentColor)?.color ?? .teal
     }
 
-    @AppStorage(AppStorageKeys.isPremium) var isPremium = false { didSet { objectWillChange.send() } }
+    @AppStorage(AppStorageKeys.isPremium) var isPremium = false {
+        didSet {
+            objectWillChange.send()
+            if isPremium != oldValue { Task { await Usage.sync() } } // weekly caps differ per plan
+        }
+    }
 
     @AppStorage(AppStorageKeys.selectedTheme) var selectedTheme = AppTheme.system.rawValue { didSet { objectWillChange.send() } }
 

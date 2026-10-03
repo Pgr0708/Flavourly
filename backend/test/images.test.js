@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, beforeEach, describe, it } from 'node:test';
 import { createCache } from '../src/cache.js';
-import { createImages, describesDish } from '../src/services.js';
+import { createImages, describesDish, photoQueries } from '../src/services.js';
 
 // Recipe photos: free sources first (each photo must show the dish and keep its licence credit), GPT last.
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'flavourly-photos-'));
@@ -41,6 +41,12 @@ function setup({ routes = {}, keys = {}, spoonPerDay = 40, imageGeneration = tru
 const nothingOnWikipedia = { 'https://en.wikipedia.org/': { query: { pages: { '-1': { title: 'x', missing: '' } } } } };
 
 describe('photo relevance', () => {
+  it('searches names in other scripts by their English name', () => {
+    assert.deepEqual(photoQueries('粥 (Congee)'), ['Congee']);
+    assert.deepEqual(photoQueries('饺子 (Jiǎozi - Dumplings)'), ['Jiǎozi - Dumplings', 'Jiǎozi', 'Dumplings']);
+    assert.deepEqual(photoQueries('Khubz (Afghan Bread)'), ['Khubz', 'Afghan Bread']);
+    assert.deepEqual(photoQueries('Pav bhaji'), ['Pav bhaji']);
+  });
   it('most of the dish name must describe the photo', () => {
     assert.equal(describesDish('Garlic butter noodles', 'Bowl of noodles with garlic and butter'), true);
     assert.equal(describesDish('Paneer tikka', 'Chicken curry in a pot'), false);
@@ -115,6 +121,18 @@ describe('recipe photo sources', () => {
     assert.equal(gpt, 1, 'no redirect and only half the words match → not trusted');
   });
 
+  it('searches by the dish name without the bracketed note ("Khubz (Afghan Bread)" → "Khubz")', async () => {
+    const images = setup({ routes: { 'https://www.themealdb.com/': { meals: null },
+      'https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&prop=pageimages': (url) => (url.endsWith('titles=Khubz')
+        ? { query: { pages: { 1: { title: 'Khubz', pageimage: 'K.jpg', thumbnail: { source: 'https://upload.wikimedia.org/k.jpg' } } } } }
+        : { query: { pages: { '-1': { missing: '' } } } }),
+      'https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&prop=imageinfo': { query: { pages: { 2: { imageinfo: [{ descriptionurl: 'https://commons.wikimedia.org/wiki/File:K.jpg', extmetadata: { LicenseShortName: { value: 'CC BY 4.0' } } }] } } } },
+      'https://api.openverse.org/': { results: [] } } });
+    const { url } = await images.recipePhoto({ title: 'Khubz (Afghan Bread)' });
+    assert.ok(url.startsWith('https://upload.wikimedia.org/k.jpg#'));
+    assert.equal(gpt, 0);
+  });
+
   it('Spoonacular: only matching titles, and photos stay inside their own daily budget', async () => {
     const images = setup({
       keys: { SPOONACULAR_API_KEY: 'sp' }, spoonPerDay: 1,
@@ -168,6 +186,16 @@ describe('recipe photo sources', () => {
     assert.equal(gpt, 0);
     await images.recipePhoto({ title: 'Grandma special stew' }); // asking for a photo explicitly may still use GPT
     assert.equal(gpt, 1);
+  });
+
+  it('a Chinese-titled dish finds a free photo through its English name instead of GPT', async () => {
+    const images = setup({ keys: { PEXELS_API_KEY: 'px' }, routes: {
+      'https://www.themealdb.com/': { meals: null },
+      'https://api.pexels.com/': (url) => (url.includes('Dumplings') ? { photos: [{ alt: 'Plate of steamed dumplings', src: { large: 'https://images.pexels.com/d.jpg' }, photographer: 'Li', url: 'https://pexels.com/d' }] } : { photos: [] }),
+      ...nothingOnWikipedia, 'https://api.openverse.org/': { results: [] } } });
+    const { url } = await images.recipePhoto({ title: '饺子 (Jiǎozi - Dumplings)' });
+    assert.ok(url.startsWith('https://images.pexels.com/d.jpg#'));
+    assert.equal(gpt, 0);
   });
 
   it('nothing free matches → GPT once, then the same photo for everyone from disk', async () => {

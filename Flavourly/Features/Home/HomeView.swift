@@ -6,7 +6,9 @@ internal import Combine
 @MainActor
 final class CookbookSearch: ObservableObject {
     static let shared = CookbookSearch()
-    @Published var query = ""
+    @Published var query = "" {
+        didSet { Personalizer.shared.searched(query) } // what they look for teaches their taste
+    }
 }
 
 struct HomeView: View {
@@ -17,6 +19,7 @@ struct HomeView: View {
     @EnvironmentObject private var settings: SettingsManager
     @ObservedObject private var search = CookbookSearch.shared
     @ObservedObject private var local = LocalFood.shared
+    @ObservedObject private var personal = Personalizer.shared
     @FetchRequest(sortDescriptors: [SortDescriptor(\.day)]) private var allMeals: FetchedResults<PlannedMeal>
     @FetchRequest(sortDescriptors: [SortDescriptor(\.expiresAt)]) private var pantry: FetchedResults<PantryItem>
     @FetchRequest(sortDescriptors: [], predicate: NSPredicate(format: "isSaved == YES AND isArchived == NO AND needsReview == YES"))
@@ -26,6 +29,9 @@ struct HomeView: View {
     @State private var filter: MealSlot?
     @State private var searchText = ""
     @State private var cookNowMinutes: Int?
+    /// New every time the app comes back to the front: a fresh mix of slides, rows and picks.
+    @State private var seed = Int.random(in: 1...1_000_000)
+    @Environment(\.scenePhase) private var scenePhase
 
     private var weekMeals: [PlannedMeal] {
         let start = Kitchen.weekStart()
@@ -45,149 +51,112 @@ struct HomeView: View {
         pantry.filter { ($0.daysLeft ?? 99) <= 2 }.prefix(8).map { $0 }
     }
 
-    private let headerHeight: CGFloat = 300
 
-    var body: some View {
-        GeometryReader { outer in
-            let top = outer.safeAreaInsets.top
-            content
-                // Once the content sheet reaches the status bar, a soft bar keeps the clock and battery readable.
-                .overlayPreferenceValue(HeaderOffsetKey.self, alignment: .top) { minY in
-                    let gone = minY < top + 8
-                    Theme.canvas.opacity(0.97)
-                        .frame(height: top)
-                        .offset(y: -top) // the overlay starts below the status bar; cover the status bar itself
-                        .opacity(gone ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.2), value: gone)
-                        .allowsHitTesting(false)
-                }
-        }
-    }
+    var body: some View { content }
 
     private var content: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 22) {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
-                    header(HomeMoment(hour: Calendar.current.component(.hour, from: context.date)))
+                    topBar(HomeMoment(hour: Calendar.current.component(.hour, from: context.date)))
                 }
-
-                // The content sheet slides over the photo with rounded corners, like a card pulled up.
-                VStack(alignment: .leading, spacing: 24) {
-                    if !needsReview.isEmpty { reviewBanner }
-                    weeklyPlanCard
-                    if let tonight { tonightCard(tonight) }
-                    quickActions
-                    cookNowCard
-                    TryNewCard()
-                    LocalDishesSection()
-                    if !useSoon.isEmpty { useSoonStrip }
-                    forYou
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 24)
-                .background(alignment: .top) {
-                    UnevenRoundedRectangle(topLeadingRadius: 30, topTrailingRadius: 30, style: .continuous)
-                        .fill(Theme.canvas)
-                        .shadow(color: .black.opacity(0.12), radius: 12, y: -4)
-                }
-                .padding(.top, -30)
-                .background {
-                    // Tracked here, not on the header: the sheet stays on screen, so its position keeps updating.
-                    GeometryReader { Color.clear.preference(key: HeaderOffsetKey.self, value: $0.frame(in: .global).minY) }
-                }
+                searchBar
+                HomeCarousel(slides: slides).id(seed)
+                weeklyPlanCard
+                quickActions
+                cookNowCard
+                if !needsReview.isEmpty { reviewBanner }
+                MoodBar()
+                // The rest follows the moment and this cook's habits (see HomeLayout).
+                ForEach(layout.filter { $0 != .quickActions && $0 != .cookNow && $0 != .plan }, id: \.self) { section($0) }
+                HomeFeed(seed: seed)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .ignoresSafeArea(edges: .top)
         .scrollIndicators(.hidden)
         .dockSpacing()
         .canvasBackground()
         .toolbar(.hidden, for: .navigationBar)
         .task { await local.refreshIfNeeded() }
-    }
-
-    // MARK: Header — full-bleed photo under the status bar that stretches when pulled down
-
-    /// The art is a wide panorama in a near-square header: centre-cropping hid the cook behind the profile
-    /// button. Instead, place the cook's face about two-thirds across, clear of the greeting and the button.
-    private func headerArt(_ moment: HomeMoment, size: CGSize) -> some View {
-        let art = UIImage(named: moment.imageName)?.size ?? size
-        let scale = max(size.width / art.width, size.height / art.height)
-        let drawn = CGSize(width: art.width * scale, height: art.height * scale)
-        let offset = min(0, max(size.width - drawn.width, size.width * 0.66 - drawn.width * moment.focusX))
-        return Image(moment.imageName)
-            .resizable()
-            .frame(width: drawn.width, height: drawn.height)
-            .offset(x: offset)
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
-            .clipped()
-    }
-
-    private func header(_ moment: HomeMoment) -> some View {
-        GeometryReader { geometry in
-            let minY = geometry.frame(in: .global).minY
-            let pull = max(0, minY)
-            ZStack(alignment: .topLeading) {
-                headerArt(moment, size: CGSize(width: geometry.size.width, height: headerHeight + pull))
-                    .overlay {
-                        LinearGradient(colors: [.black.opacity(0.5), .black.opacity(0.05), .black.opacity(0.3)], startPoint: .top, endPoint: .bottom)
-                    }
-                    .overlay {
-                        LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .leading, endPoint: .center)
-                    }
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(moment.greeting).font(Theme.heading(26, .bold))
-                            Text("\(settings.displayName)! 👋").font(Theme.brand(30)).lineLimit(1).minimumScaleFactor(0.6)
-                        }
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 6)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityElement(children: .combine)
-                        Spacer()
-                        NavigationLink(value: Route.profile) {
-                            Image(systemName: "person.crop.circle")
-                                .font(.system(size: 21))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(.ultraThinMaterial.opacity(0.9), in: Circle())
-                                .overlay(Circle().strokeBorder(.white.opacity(0.35)))
-                        }
-                        .simultaneousGesture(TapGesture().onEnded { Haptics.tick() })
-                        .accessibilityLabel("Open profile")
-                    }
-                    Spacer(minLength: 16)
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
-                        TextField("", text: $searchText, prompt: Text("Search recipes, ingredients...").foregroundColor(Theme.muted))
-                            .foregroundStyle(Theme.ink)
-                            .submitLabel(.search)
-                            .onSubmit(runSearch)
-                        Button {
-                            Haptics.tick()
-                            runSearch()
-                        } label: {
-                            Image(systemName: "slider.horizontal.3").foregroundStyle(Theme.muted)
-                        }
-                        .accessibilityLabel("Search and filter")
-                    }
-                    .font(.system(size: 14))
-                    .padding(.horizontal, 15)
-                    .frame(height: 48)
-                    .background(.white.opacity(0.94), in: Capsule())
-                    .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 64 + pull)
-                .padding(.bottom, 52)
-            }
-            .frame(width: geometry.size.width, height: headerHeight + pull)
-            .offset(y: -pull)
+        .onChange(of: scenePhase) { old, new in
+            if old == .background && new == .active { seed = Int.random(in: 1...1_000_000) }
         }
-        .frame(height: headerHeight)
+    }
+
+    // MARK: Top — a slim greeting, search, then the strip of dishes for today
+
+    private func topBar(_ moment: HomeMoment) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(LocalizedStringKey(moment.greeting)).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
+                Text("\(settings.displayName) 👋").font(Theme.heading(24, .bold)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer()
+            NavigationLink(value: Route.profile) {
+                ProfileAvatar(size: 44)
+            }
+            .simultaneousGesture(TapGesture().onEnded { Haptics.tick() })
+            .accessibilityLabel("Open profile")
+        }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+            TextField("", text: $searchText, prompt: Text("Search any dish — e.g. Aloo Puri").foregroundColor(Theme.muted))
+                .foregroundStyle(Theme.ink)
+                .submitLabel(.search)
+                .onSubmit(runSearch)
+            Button {
+                Haptics.tick()
+                runSearch()
+            } label: {
+                Image(systemName: "slider.horizontal.3").foregroundStyle(Theme.muted)
+            }
+            .accessibilityLabel("Search and filter")
+        }
+        .font(.system(size: 14))
+        .padding(.horizontal, 15)
+        .frame(height: 48)
+        .background(.white, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.line))
+    }
+
+    /// Today's meals, dishes they keep cooking, the best pick now, something new, local and world food.
+    private var slides: [HomeSlide] {
+        var slides: [HomeSlide] = []
+        var used = Set<String>()
+        var rng = SeededRandom(seed: UInt64(seed))
+        func add(_ recipe: Recipe, _ kicker: LocalizedStringKey, _ subtitle: String?) {
+            guard used.insert(recipe.key).inserted else { return }
+            slides.append(HomeSlide(id: "\(slides.count)-\(recipe.key)", kicker: kicker, title: recipe.displayTitle, subtitle: subtitle,
+                                    art: .recipe(recipe), route: recipe.route))
+        }
+        let today = Calendar.current.startOfDay(for: .now)
+        for meal in weekMeals where Calendar.current.isDate(meal.day ?? .distantPast, inSameDayAs: today) {
+            if let recipe = meal.recipe { add(recipe, "Today's plan", meal.mealSlot.label) }
+        }
+        let again = saved.filter { $0.cookedCount > 0 || $0.isFavorite }.sorted { ($0.cookedCount, $0.rating) > ($1.cookedCount, $1.rating) }.prefix(6)
+        for recipe in again.shuffled(using: &rng).prefix(2) {
+            add(recipe, "Cook it again", recipe.cookedCount > 0 ? "\(recipe.cookedCount)× ★\(recipe.rating > 0 ? " \(recipe.rating)" : "")" : nil)
+        }
+        let picks = rightNow.prefix(3)
+        if let pick = picks.randomElement(using: &rng), let recipe = Kitchen.recipe(forKey: pick.id) { add(recipe, "Right now", pick.reasons.first) }
+        let day = seed
+        for recipe in local.untried(profile: People.profile(), seed: day, count: 2) { add(recipe, "New to you", recipe.cuisine) }
+        if let recipe = local.dishes.filter({ !used.contains($0.key) }).prefix(8).randomElement(using: &rng) { add(recipe, "Popular near you", local.placeName) }
+        let kitchens = WorldKitchens.featured.filter { $0.country != local.country }
+        if !kitchens.isEmpty {
+            let pick = kitchens[day % kitchens.count]
+            slides.append(HomeSlide(id: "world-\(pick.country)", kicker: "World kitchen", title: "\(LocalFood.flag(for: pick.country)) \(LocalFood.name(for: pick.country))",
+                                    subtitle: pick.dish, art: .dish(pick.dish), route: .country(pick.country)))
+        }
+        // Today's plan leads; everything else comes in a new order each visit.
+        let planned = slides.prefix { $0.kicker == "Today's plan" }.count
+        return Array(slides.prefix(planned)) + slides.dropFirst(planned).shuffled(using: &rng)
     }
 
     private func runSearch() {
@@ -380,6 +349,45 @@ struct HomeView: View {
         }
     }
 
+    // MARK: Adaptive layout
+
+    private var layout: [HomeSection] {
+        let moment = Moment(.now)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))!
+        let habits = personal.habits
+        return HomeLayout.order(at: moment, hasTonight: tonight != nil,
+                                expiringToday: useSoon.contains { ($0.expiresAt ?? .distantFuture) < tomorrow },
+                                cooksAtThisMoment: habits.cooksAt.isEmpty || habits.busiestMoments.prefix(3).contains(moment))
+    }
+
+    @ViewBuilder
+    private func section(_ section: HomeSection) -> some View {
+        switch section {
+        case .rightNow: RightNowCard(picks: rightNow)
+        case .tonight: if let tonight { tonightCard(tonight) }
+        case .plan: weeklyPlanCard
+        case .useSoon: if !useSoon.isEmpty { useSoonStrip }
+        case .forYou: forYou
+        case .cookNow: cookNowCard
+        case .quickActions: quickActions
+        case .tryNew: TryNewCard()
+        case .local: LocalDishesSection()
+        case .world: WorldKitchensRow()
+        }
+    }
+
+    /// The best dishes for this very moment: this meal, the mood, habits and what's in the pantry.
+    private var rightNow: [Ranked] {
+        _ = saved.count + local.dishes.count + (personal.mood?.hashValue ?? 0)
+        var context = RankContext()
+        context.profile = People.profile()
+        context.slot = .at(hour: Calendar.current.component(.hour, from: .now))
+        context.pantry = Kitchen.pantrySignals()
+        context.cuisines = settings.customizationPreferences.choices["cuisines"] ?? []
+        context.highProtein = People.me().wantsHighProtein
+        return Array(Recommender.rank(Kitchen.candidates().map(\.facts), context).prefix(6))
+    }
+
     // MARK: For You — ranked by the rules engine
 
     private var forYou: some View {
@@ -430,7 +438,7 @@ struct HomeView: View {
     }
 
     private var recommendations: [Ranked] {
-        _ = saved.count // re-rank when the cookbook changes
+        _ = saved.count + (personal.mood?.hashValue ?? 0) + personal.habits.eventCount // re-rank on cookbook, mood and learning changes
         var context = RankContext()
         context.profile = People.profile()
         context.slot = filter
@@ -467,9 +475,16 @@ struct HomeView: View {
     }
 }
 
-private struct HeaderOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = .infinity
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = min(value, nextValue()) }
+/// Repeatable shuffles for one Home visit (SplitMix64).
+struct SeededRandom: RandomNumberGenerator {
+    var seed: UInt64
+    mutating func next() -> UInt64 {
+        seed &+= 0x9E37_79B9_7F4A_7C15
+        var z = seed
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
 }
 
 extension Notification.Name {

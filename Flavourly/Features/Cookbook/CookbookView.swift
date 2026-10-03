@@ -116,7 +116,7 @@ struct CookbookView: View {
 
                 if mode == 0 { myRecipes } else { DiscoverContent() }
             }
-            .padding(.bottom, selecting ? 90 : 16)
+            .padding(.bottom, selecting ? 170 : 16)
         }
         .scrollDismissesKeyboard(.interactively)
         .dockSpacing()
@@ -206,6 +206,8 @@ struct CookbookView: View {
 
     @ViewBuilder
     private var myRecipes: some View {
+        DishSearchPanel(query: $search.query, noResults: !search.query.isEmpty && !recipes.isEmpty && visible.isEmpty) { sheet = .importLink }
+            .padding(.horizontal, 20).padding(.top, 12)
         collectionsRow.padding(.top, 18)
         historyChips.padding(.top, 16)
 
@@ -236,7 +238,7 @@ struct CookbookView: View {
                            message: "Import from Instagram, TikTok, YouTube or any website — or save ideas from Discover.",
                            actionTitle: "Import a recipe") { sheet = .importLink }
                 .padding(20)
-        } else if list.isEmpty {
+        } else if list.isEmpty, search.query.isEmpty {
             EmptyStateView(systemImage: "magnifyingglass", title: "No matches",
                            message: "Try another word or clear some filters.",
                            actionTitle: "Clear filters") {
@@ -333,46 +335,71 @@ struct CookbookView: View {
 
     // MARK: Selection
 
+    /// A solid dark tray: how many are picked, then five clear actions.
     private var selectionBar: some View {
-        HStack(spacing: 0) {
-            selectionAction("Plan these", "calendar.badge.plus", Theme.green) { planSelected() }
-            selectionAction("Move", "folder", Theme.ink) { showMoveSheet = true }
-            selectionAction("Favourite", "heart", Theme.plan) {
-                forSelected { $0.isFavorite = true }
-                DropsManager.showSuccess(title: "Added to favourites")
+        VStack(spacing: 12) {
+            HStack {
+                Text(selection.isEmpty ? "Tap recipes to select them" : "\(selection.count) selected")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                Spacer()
+                Button(selection.count == visible.count ? "Clear" : "Select all") {
+                    Haptics.select()
+                    withAnimation(Theme.snappy) {
+                        if selection.count == visible.count { selection.removeAll() } else { selection = Set(visible.map(\.objectID)) }
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .tint(Color(hex: "#CDEBC0"))
             }
-            selectionAction("Duplicate", "plus.square.on.square", Theme.ink) {
-                forSelected { Kitchen.duplicate($0) }
-                DropsManager.showSuccess(title: "Duplicated \(selection.count)")
+            HStack(spacing: 6) {
+                selectionAction("Plan these", "calendar.badge.plus", Theme.green) { planSelected() }
+                selectionAction("Move", "folder.fill", Color(hex: "#5B8DEF")) { showMoveSheet = true }
+                selectionAction("Favourite", "heart.fill", Theme.plan) {
+                    forSelected { $0.isFavorite = true }
+                    DropsManager.showSuccess(title: "Added to favourites")
+                }
+                selectionAction("Duplicate", "plus.square.on.square", Color(hex: "#9C56E9")) {
+                    let count = selection.count
+                    forSelected { Kitchen.duplicate($0) }
+                    DropsManager.showSuccess(title: "Duplicated \(count)")
+                }
+                selectionAction("Archive", "archivebox.fill", Theme.allergen) {
+                    let count = selection.count
+                    forSelected { $0.isArchived = true }
+                    Haptics.destructive()
+                    DropsManager.showInfo(title: "Archived \(count)")
+                }
             }
-            selectionAction("Archive", "archivebox", Theme.allergen) {
-                forSelected { $0.isArchived = true }
-                Haptics.destructive()
-                DropsManager.showInfo(title: "Archived \(selection.count)")
-            }
+            .disabled(selection.isEmpty)
+            .opacity(selection.isEmpty ? 0.45 : 1)
         }
-        .padding(.vertical, 8)
-        .background(.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: Theme.ink.opacity(0.15), radius: 16, y: 6)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 96)
-        .disabled(selection.isEmpty)
-        .opacity(selection.isEmpty ? 0.6 : 1)
+        .padding(14)
+        .background(Theme.ink, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 92)
+        .animation(Theme.snappy, value: selection.count)
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private func selectionAction(_ title: String, _ symbol: String, _ tint: Color, action: @escaping () -> Void) -> some View {
+    private func selectionAction(_ title: LocalizedStringKey, _ symbol: String, _ tint: Color, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.primary()
             action()
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
-                Text(title).font(.system(size: 10, weight: .semibold))
+            VStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(tint, in: Circle())
+                Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity, minHeight: 50)
+            .frame(maxWidth: .infinity)
         }
+        .buttonStyle(PressableStyle(scale: 0.92))
     }
 
     private func toggle(_ recipe: Recipe) {

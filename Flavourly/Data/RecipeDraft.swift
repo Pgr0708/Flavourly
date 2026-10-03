@@ -212,7 +212,9 @@ extension RecipeDraft {
         draft.cookMinutes = min(max(cookMinutes, 0), 2880)
         draft.totalMinutes = min(max(totalMinutes, 0), 2880)
         draft.mealTypes = Array(Set(mealTypes.map { $0.lowercased() }).intersection(["breakfast", "lunch", "dinner", "snack"])).sorted()
-        draft.tags = Array((NSOrderedSet(array: tags.compactMap { clean($0, Validate.Limit.tag) }).array as? [String] ?? []).prefix(Validate.Limit.tags))
+        // "null"/"none" as text (from older server answers) is not a tag.
+        let realTags = tags.compactMap { clean($0, Validate.Limit.tag) }.filter { !["null", "none", "n/a", "unknown"].contains($0.lowercased()) }
+        draft.tags = Array((NSOrderedSet(array: realTags).array as? [String] ?? []).prefix(Validate.Limit.tags))
         draft.ingredients = Array(ingredients.compactMap { item -> DraftIngredient? in
             var item = item
             item.text = clean(item.text, Validate.Limit.ingredient) ?? ""

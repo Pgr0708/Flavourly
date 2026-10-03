@@ -11,8 +11,9 @@ struct LocalDishesSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Popular in \(local.countryName) \(local.flag)").font(Theme.section).foregroundStyle(Theme.ink).lineLimit(1)
-                    Text("Home-style favourites from every region").font(Theme.micro).foregroundStyle(Theme.muted)
+                    Text("Popular in \(local.placeName) \(local.flag)").font(Theme.section).foregroundStyle(Theme.ink).lineLimit(1)
+                    Text(local.shownRegion == nil ? "Home-style favourites from every region" : "Home-style favourites near you")
+                        .font(Theme.micro).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 Button("Change") {
@@ -21,7 +22,7 @@ struct LocalDishesSection: View {
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .tint(Theme.green)
-                .accessibilityLabel("Change country, now \(local.countryName)")
+                .accessibilityLabel("Change country, now \(local.placeName)")
             }
             if dishes.isEmpty {
                 if let problem = local.problem {
@@ -175,6 +176,8 @@ struct CountryPickerSheet: View {
     @ObservedObject private var local = LocalFood.shared
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var locating = false
+    @State private var locationOff = false
 
     private var matches: [String] {
         let text = query.trimmingCharacters(in: .whitespaces)
@@ -184,21 +187,54 @@ struct CountryPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(matches, id: \.self) { code in
-                Button {
-                    Haptics.select()
-                    local.country = code
-                    DropsManager.showSuccess(title: "Local food: \(LocalFood.name(for: code))", subtitle: "Finding favourite home dishes…")
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        Text(LocalFood.flag(for: code)).font(.system(size: 24))
-                        Text(LocalFood.name(for: code)).foregroundStyle(Theme.ink)
-                        Spacer()
-                        if code == local.country { Image(systemName: "checkmark").foregroundStyle(Theme.green).fontWeight(.bold) }
+            List {
+                if query.isEmpty {
+                    Section {
+                        Button(action: useLocation) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "location.fill").font(.system(size: 18)).foregroundStyle(Theme.green).frame(width: 30)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Use my location").foregroundStyle(Theme.ink)
+                                    Text(locationOff ? "Location is off for Flavourly — turn it on in Settings."
+                                         : local.followsLocation ? "Now: \(local.placeName), \(local.countryName)" : "Dishes from where you live")
+                                        .font(Theme.micro).foregroundStyle(locationOff ? Theme.allergen : Theme.muted)
+                                }
+                                Spacer()
+                                if locating { ProgressView() } else if local.followsLocation, !locationOff {
+                                    Image(systemName: "checkmark").foregroundStyle(Theme.green).fontWeight(.bold)
+                                }
+                            }
+                        }
+                        .disabled(locating)
+                        .accessibilityAddTraits(local.followsLocation ? .isSelected : [])
+                        if locationOff {
+                            Button("Open Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            }
+                            .tint(Theme.green)
+                        }
                     }
                 }
-                .accessibilityAddTraits(code == local.country ? .isSelected : [])
+                Section {
+                    ForEach(matches, id: \.self) { code in
+                        Button {
+                            Haptics.select()
+                            local.choose(code)
+                            DropsManager.showSuccess(title: "Local food: \(LocalFood.name(for: code))", subtitle: "Finding favourite home dishes…")
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(LocalFood.flag(for: code)).font(.system(size: 24))
+                                Text(LocalFood.name(for: code)).foregroundStyle(Theme.ink)
+                                Spacer()
+                                if code == local.country, !local.followsLocation {
+                                    Image(systemName: "checkmark").foregroundStyle(Theme.green).fontWeight(.bold)
+                                }
+                            }
+                        }
+                        .accessibilityAddTraits(code == local.country && !local.followsLocation ? .isSelected : [])
+                    }
+                }
             }
             .listStyle(.plain)
             .overlay {
@@ -212,5 +248,19 @@ struct CountryPickerSheet: View {
             }
         }
         .presentationDetents([.large])
+    }
+
+    private func useLocation() {
+        Haptics.select()
+        locating = true
+        Task {
+            let found = await local.followLocation()
+            locating = false
+            locationOff = !found && LocationService.shared.isDenied
+            if found {
+                DropsManager.showSuccess(title: "Local food: \(local.placeName)", subtitle: "Finding favourite home dishes…")
+                dismiss()
+            }
+        }
     }
 }

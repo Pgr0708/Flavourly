@@ -38,7 +38,6 @@ const schema = z.object({
   // gpt-4o-mini-transcribe ≈ $0.003/min; whisper-1 / gpt-4o-transcribe ≈ $0.006/min.
   TRANSCRIBE_MODEL: z.string().min(1).default('gpt-4o-mini-transcribe'),
   TRANSCRIBE_MAX_MB: int(24, 1, 25),
-  TRANSCRIBE_PER_DAY: int(30, 1, 10_000),
   // Verified nutrition. USDA key is free (api.data.gov); DEMO_KEY works but allows ~30 requests/hour.
   USDA_API_KEY: z.string().min(1).default('DEMO_KEY'),
   // Optional: Spoonacular fills in ingredients USDA can't match (free plan = 150 points/day).
@@ -68,12 +67,27 @@ const schema = z.object({
   IMAGE_QUALITY: z.enum(['low', 'medium', 'high']).default('low'),
   IMAGE_DIR: z.string().default(path.join(ROOT, 'public', 'images')),
 
-  FREE_IMPORTS_PER_WEEK: int(5, 0, 10_000),
-  FREE_AI_PLANS_PER_WEEK: int(1, 0, 10_000),
-  FREE_AI_IDEAS_PER_WEEK: int(5, 0, 10_000),
-  FREE_AI_SWAPS_PER_WEEK: int(10, 0, 10_000),
-  FREE_IMAGES_PER_WEEK: int(3, 0, 10_000),
-  FREE_EXTRACTS_PER_DAY: int(20, 0, 10_000),
+  // Free plan: no AI at all (0). Recipe-card website imports, shared dishes and free photos stay free.
+  FREE_IMPORTS_PER_WEEK: int(0, 0, 10_000),
+  FREE_AI_PLANS_PER_WEEK: int(0, 0, 10_000),
+  FREE_AI_IDEAS_PER_WEEK: int(0, 0, 10_000),
+  FREE_AI_SWAPS_PER_WEEK: int(0, 0, 10_000),
+  FREE_IMAGES_PER_WEEK: int(0, 0, 10_000),
+  FREE_EXTRACTS_PER_WEEK: int(0, 0, 10_000),
+  FREE_DISH_AI_PER_WEEK: int(0, 0, 10_000),
+  FREE_VARIATIONS_PER_WEEK: int(0, 0, 10_000),
+  // Premium: weekly caps (reset Monday) so one account can never run up a big bill (worst case ≈ $4.50/month).
+  PREMIUM_IMPORTS_PER_WEEK: int(40, 0, 100_000),
+  PREMIUM_AI_PLANS_PER_WEEK: int(7, 0, 100_000),
+  PREMIUM_AI_IDEAS_PER_WEEK: int(40, 0, 100_000),
+  PREMIUM_AI_SWAPS_PER_WEEK: int(60, 0, 100_000),
+  PREMIUM_IMAGES_PER_WEEK: int(10, 0, 100_000),
+  PREMIUM_EXTRACTS_PER_WEEK: int(40, 0, 100_000),
+  PREMIUM_DISH_AI_PER_WEEK: int(30, 0, 100_000),
+  PREMIUM_VARIATIONS_PER_WEEK: int(15, 0, 100_000),
+  PREMIUM_TRANSCRIBE_MINUTES_PER_WEEK: int(60, 0, 100_000),
+  // New place catalogues (country or region, ~$0.02 of AI each, then shared): Premium only, a few a day.
+  REGION_BUILDS_PER_DAY: int(10, 0, 10_000),
   RATE_LIMIT_PER_MINUTE: int(60, 1, 100_000),
   REGISTRATIONS_PER_HOUR: int(20, 1, 100_000),
 });

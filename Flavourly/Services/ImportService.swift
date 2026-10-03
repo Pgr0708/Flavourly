@@ -50,7 +50,7 @@ final class ImportService: ObservableObject {
         guard let url = checked.url else {
             throw Failure(title: "That isn't a link we can import", message: checked.message ?? "Paste a full link, like https://instagram.com/reel/…", partial: nil)
         }
-        try checkAllowance()
+        // Recipe websites are read here on the iPhone (free); only AI reads count, and the server checks those.
         begin(detail: url.host() ?? "")
         defer { isRunning = false }
 
@@ -97,7 +97,7 @@ final class ImportService: ObservableObject {
                           partial: result)
         }
         await finalize(&result)
-        Usage.record(.importRecipe)
+        if Self.isSocial(url) { Usage.record(.importRecipe) }
         return result
     }
 
@@ -233,12 +233,6 @@ final class ImportService: ObservableObject {
 
     // MARK: - Helpers
 
-    private func checkAllowance() throws {
-        guard Usage.canUse(.importRecipe) else {
-            throw Failure(title: "Free imports used", message: "You've used this week's \(Usage.limit(.importRecipe)) free imports.", partial: nil, isLimit: true)
-        }
-    }
-
     private func begin(detail: String) {
         isRunning = true
         stage = .opening
@@ -269,7 +263,12 @@ final class ImportService: ObservableObject {
     private static func explain(_ error: Error) throws -> String {
         if case APIError.limit(let message) = error {
             Usage.exhaust(.importRecipe)
-            throw Failure(title: "Free imports used", message: message, partial: nil, isLimit: true)
+            throw Failure(title: "This week's AI imports are used", message: message, partial: nil, isLimit: true)
+        }
+        if case APIError.premiumRequired = error {
+            throw Failure(title: "AI import is part of Premium",
+                          message: "Instagram, TikTok and YouTube captions are read by AI. Recipe websites, typed recipes and clear scans still import free.",
+                          partial: nil, isLimit: true)
         }
         return error.localizedDescription
     }

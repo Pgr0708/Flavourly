@@ -102,6 +102,29 @@ function answer(name, request) {
       const dishes = [dish('Shared dish', true), dish(`${focus.split(' ')[0]} special`, focus.includes('vegetarian')), { region: null, recipe: { ...dish('No steps', true).recipe, steps: [] } }];
       return { dishes: dishes.slice(0, count) };
     }
+    case 'dish_names':
+      return { dishes: [
+        { name: 'Aloo Paratha', region: 'Punjab' }, { name: 'Aloo Gobi', region: null }, { name: 'Aloo Puri', region: 'Gujarat' },
+        { name: 'Sev Tameta', region: 'Gujarat' }, { name: 'Poori Bhaji', region: null }, { name: 'aloo puri', region: null }, { name: 'null', region: null },
+      ] };
+    case 'dish_recipe': {
+      const { dish } = JSON.parse(user);
+      if (/xyzzy/i.test(dish)) return { found: false, recipe: { ...recipeFromText(''), title: '', ingredients: [], steps: [] } };
+      return { found: true, recipe: { ...recipeFromText(`${dish}\nIngredients\n4 potatoes\n300 g wheat flour\n1 tsp cumin\nMethod\n1. Boil the potatoes for 15 min\n2. Fry the puris`), title: dish } };
+    }
+    case 'recipe_variation': {
+      const { dish, change } = JSON.parse(user);
+      if (/not food/i.test(change)) return { ok: false, recipe: { ...recipeFromText(''), title: '', ingredients: [], steps: [] } };
+      const recipe = recipeFromText(`${change} ${dish.title}\nIngredients\n200 g paneer\n2 potatoes\n1 tbsp oil\nMethod\n1. Heat the oil for 2 min.\n2. Add everything and cook 10 min.`);
+      return { ok: true, recipe: { ...recipe, title: `Paneer ${dish.title}` } };
+    }
+    case 'regional_cuisines':
+      return { regions: [
+        { name: 'Sicily', about: 'Citrus, seafood and sweet-sour flavours.', signature: 'Arancini' },
+        { name: 'Tuscany', about: 'Bread, beans and olive oil.', signature: 'Ribollita' },
+        { name: 'Italy', about: 'The whole country (must be dropped).', signature: 'Pizza' },
+        { name: 'sicily', about: 'Duplicate (must be dropped).', signature: 'Cannoli' },
+      ] };
     case 'local_kitchen':
       return { cuisine: 'Indian', staples: ['Rice', 'Atta (wheat flour)', 'Toor dal', 'Rice', '  '], cravings: ['Biryani', 'Street food'] };
     case 'meal_plan': {
@@ -137,6 +160,7 @@ export function startFakeOpenAI({ port = 0, slowMs = 3_000 } = {}) {
       const request = JSON.parse(raw || '{}');
       calls.push({ path: req.url, body: request });
       if (req.url === '/v1/images/generations') return send(200, { data: [{ b64_json: TINY_JPEG }] });
+      if (req.url === '/v1/moderations') return send(200, { results: [{ flagged: String(request.input).includes('FLAG_ME') }] });
       if (req.url !== '/v1/chat/completions') return send(404, { error: { message: 'not found' } });
       const text = JSON.stringify(request.messages);
       if (text.includes('FAIL_500')) return send(500, { error: { message: 'boom' } });

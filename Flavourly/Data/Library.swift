@@ -1,6 +1,7 @@
 import CoreData
 internal import Combine
 import Foundation
+import UIKit
 
 /// Hand-written recipes shipped with the app so Discover is never empty.
 /// They live in an in-memory store (never synced) until the user saves or plans one.
@@ -53,10 +54,26 @@ final class Library {
         recipes = drafts.map { draft in
             var copy = draft
             copy.method = "library"
+            if let found = Self.foundPhotos[copy.title.lowercased()], copy.imageURL == nil, Self.needsBetterPhoto(copy.imageName) {
+                copy.imageURL = found
+                copy.imageName = nil
+            }
             let recipe = Kitchen.save(copy, in: context, commit: false)
             recipe.isCurated = true
             recipe.isSaved = false
             return recipe
         }
+    }
+
+    /// No bundled photo, or one too small to fill a card (several ship at ~100–300 px): look for a sharp one.
+    static func needsBetterPhoto(_ imageName: String?) -> Bool {
+        guard let imageName, let image = UIImage(named: imageName) else { return true }
+        return image.size.width * image.scale < 500
+    }
+
+    /// Free photos found for built-in recipes that ship without one, kept so the next launch shows them at once.
+    static var foundPhotos: [String: String] {
+        get { UserDefaults.standard.dictionary(forKey: "libraryPhotos") as? [String: String] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "libraryPhotos") }
     }
 }

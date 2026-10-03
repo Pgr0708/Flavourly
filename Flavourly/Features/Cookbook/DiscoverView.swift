@@ -91,7 +91,10 @@ struct DiscoverContent: View {
         VStack(alignment: .leading, spacing: 18) {
             rulesRow
             heroCard
-            if category == nil { LocalDishesSection() }
+            if category == nil {
+                LocalDishesSection()
+                WorldKitchensRow()
+            }
             browseGrid
             if category == nil {
                 let pantryPicks = all.filter { !$0.1.have.isEmpty }.sorted { $0.1.coverage > $1.1.coverage }.prefix(3)

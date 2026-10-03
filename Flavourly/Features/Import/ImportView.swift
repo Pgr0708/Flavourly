@@ -205,15 +205,22 @@ struct ImportView: View {
             Label("Faster: tap Share in Instagram, TikTok or Safari and choose Flavourly.", systemImage: "square.and.arrow.up")
                 .font(Theme.micro).foregroundStyle(Theme.ink2)
 
-            if !settings.isPremium {
+            if settings.isPremium {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(remaining) of \(Usage.limit(.importRecipe)) AI link imports left this week").font(Theme.micro.weight(.semibold))
+                    ProgressView(value: Double(remaining), total: Double(max(1, Usage.limit(.importRecipe)))).tint(Theme.premium)
+                    Text("Recipe websites don't use any.").font(Theme.micro).foregroundStyle(Theme.muted)
+                }
+                .padding(12)
+                .background(Theme.premiumSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            } else {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("\(remaining) of \(Usage.limit(.importRecipe)) free link imports left this week").font(Theme.micro.weight(.semibold))
+                        Text("Recipe websites import free").font(Theme.micro.weight(.semibold))
                         Spacer()
-                        Button("Unlimited") { showPaywall = true }.font(Theme.micro.weight(.bold)).tint(Theme.premiumDeep)
+                        Button("Premium") { showPaywall = true }.font(Theme.micro.weight(.bold)).tint(Theme.premiumDeep)
                     }
-                    ProgressView(value: Double(remaining), total: Double(Usage.limit(.importRecipe))).tint(Theme.premium)
-                    Text("Photo, text and video imports are always free.").font(Theme.micro).foregroundStyle(Theme.muted)
+                    Text("Instagram, TikTok and YouTube are read by AI, which is part of Premium.").font(Theme.micro).foregroundStyle(Theme.muted)
                 }
                 .padding(12)
                 .background(Theme.premiumSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -429,9 +436,11 @@ struct ImportView: View {
                 }
             }
             if failure.isLimit {
-                Text("Resets \(Usage.resetDate.formatted(.dateTime.weekday(.wide))). Scanning, pasting and videos stay free.")
-                    .font(Theme.micro).foregroundStyle(Theme.muted)
-                PrimaryButton(title: "Get unlimited imports", systemImage: "crown.fill", tone: .premium) { showPaywall = true }
+                if settings.isPremium {
+                    Text("Resets \(Usage.resetDate.formatted(.dateTime.weekday(.wide))).").font(Theme.micro).foregroundStyle(Theme.muted)
+                } else {
+                    PrimaryButton(title: "Get Premium", systemImage: "crown.fill", tone: .premium) { showPaywall = true }
+                }
                 PrimaryButton(title: "Scan or paste instead", systemImage: "camera.viewfinder", tone: .outline) { restart(.photo) }
             } else if let found = failure.partial {
                 VStack(alignment: .leading, spacing: 4) {
@@ -467,12 +476,6 @@ struct ImportView: View {
     // MARK: Actions
 
     private func importLink() {
-        guard Usage.canUse(.importRecipe) else {
-            Haptics.warning()
-            phase = .failed(.init(title: "Free imports used",
-                                  message: "You've used this week's \(Usage.limit(.importRecipe)) free link imports.", partial: nil, isLimit: true))
-            return
-        }
         let raw = link
         run { try await importer.importLink(raw) }
     }

@@ -17,7 +17,80 @@ struct DomainCheck {
         FoodRules.allergens(in: text).first { $0.allergen == allergen }?.certain
     }
 
+    /// The learning engine: habits from activity, mood fit, and the effect on ranking.
+    static func habits() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 7, hour: 19))! // Wednesday 7pm
+        func at(daysAgo: Double, hour: Int) -> Date {
+            let day = calendar.date(byAdding: .day, value: -Int(daysAgo), to: calendar.startOfDay(for: now))!
+            return calendar.date(byAdding: .hour, value: hour, to: day)!
+        }
+        var log: [ActivityRecord] = []
+        // Weekday evenings: quick dinners (20 min stated, really 25), usually tired.
+        for day in [1.0, 2, 3, 6, 8, 9] {
+            log.append(ActivityRecord(kind: .cookStart, at: at(daysAgo: day, hour: 19), recipeKey: "dal-\(day)", value: 20))
+            log.append(ActivityRecord(kind: .cookFinish, at: at(daysAgo: day, hour: 19).addingTimeInterval(25 * 60), recipeKey: "dal-\(day)", value: 25))
+            log.append(ActivityRecord(kind: .mood, at: at(daysAgo: day, hour: 18), mood: .tired))
+        }
+        log.append(ActivityRecord(kind: .search, at: at(daysAgo: 1, hour: 12), text: "easy paneer curry"))
+        log.append(ActivityRecord(kind: .search, at: at(daysAgo: 2, hour: 12), text: "paneer"))
+        log.append(ActivityRecord(kind: .skip, at: at(daysAgo: 1, hour: 18), recipeKey: "lasagne"))
+        log.append(ActivityRecord(kind: .skip, at: at(daysAgo: 3, hour: 18), recipeKey: "lasagne"))
+        let habits = Habits.learn(from: log, now: now, calendar: calendar)
+        check(habits.usualMinutes(at: now, calendar: calendar).map { (23...27).contains($0) } == true,
+              "weekday evenings: 20 min recipes taking 25 → usual ~25 min, got \(String(describing: habits.usualMinutes(at: now, calendar: calendar)))")
+        check(abs(habits.pace - 1.25) < 0.05, "pace learned from real cooking time: \(habits.pace)")
+        check(habits.likelyMood(at: now, calendar: calendar)?.mood == .tired, "tired is the usual weekday-evening mood")
+        check(habits.usualDinnerHour == 19, "usual dinner hour 7pm: \(String(describing: habits.usualDinnerHour))")
+        check(habits.topSearches().first == "paneer", "\"paneer\" is the top search; \"easy\" is ignored: \(habits.topSearches())")
+        let weekendMorning = calendar.date(from: DateComponents(year: 2026, month: 10, day: 10, hour: 9))!
+        check(habits.likelyMood(at: weekendMorning, calendar: calendar) == nil, "no mood guessed where there's no history")
+
+        let quick = RecipeFacts(id: "quick-paneer", title: "Paneer bhurji", ingredientNames: ["paneer", "onion"], minutes: 20, slots: [.dinner])
+        let slow = RecipeFacts(id: "lasagne", title: "Lasagne", ingredientNames: ["pasta", "beef"], minutes: 90, slots: [.dinner])
+        let quickBoost = habits.boost(for: quick, mood: .tired, at: now, calendar: calendar)
+        let slowBoost = habits.boost(for: slow, mood: .tired, at: now, calendar: calendar)
+        check(quickBoost.boost > 1.5 && slowBoost.boost < -1, "tired weekday evening: quick paneer up, skipped 90-min lasagne down (\(quickBoost.boost), \(slowBoost.boost))")
+        check(quickBoost.reason == "Easy for a tired day", "the mood is the main reason: \(String(describing: quickBoost.reason))")
+        check(habits.boost(for: quick, mood: nil, at: now, calendar: calendar).reason?.contains("paneer") == true, "without a mood, the search explains it")
+
+        var context = RankContext()
+        context.now = now
+        context.habits = habits
+        context.mood = .tired
+        let ranked = Recommender.rank([slow, quick], context)
+        check(ranked.first?.facts.id == "quick-paneer", "ranking follows habits and mood")
+        check(Habits.moodFit(slow, mood: .comfort, haystack: "lasagne pasta beef", taste: TasteProfile()).0 > 0, "lasagne is comfort food")
+        check(Habits.learn(from: [], now: now).isEmpty, "no activity → nothing learned")
+        // More moods.
+        let congee = RecipeFacts(id: "congee", title: "Congee", ingredientNames: ["rice", "ginger", "water"], minutes: 40, slots: [.dinner])
+        let butterChicken = RecipeFacts(id: "bc", title: "Butter chicken", ingredientNames: ["chicken", "butter", "cream"], minutes: 50, slots: [.dinner], cuisine: "Indian")
+        let fit = { (r: RecipeFacts, m: Mood) in Habits.moodFit(r, mood: m, haystack: ([r.title] + r.ingredientNames).joined(separator: " ").lowercased(), taste: TasteProfile(), localCuisine: "Indian").0 }
+        check(fit(congee, .unwell) > 0.5 && fit(butterChicken, .unwell) < 0, "unwell: congee yes, butter chicken no")
+        check(fit(congee, .cozy) > 0.5, "rainy day: congee is cozy")
+        check(fit(butterChicken, .homesick) > 0.5 && fit(congee, .homesick) <= 0, "homesick: home cuisine first")
+        check(fit(quick, .lazy) > 0 && fit(slow, .lazy) < 0, "lazy: 20-min paneer over 90-min lasagne")
+        check(Mood.allCases.count == 16 && Set(Mood.allCases.map(\.label)).count == 16, "16 distinct moods")
+
+        // Home order follows the moment.
+        let morning = HomeLayout.order(at: Moment(weekend: false, part: .morning), hasTonight: true, expiringToday: false, cooksAtThisMoment: true)
+        check(morning.first == .rightNow && morning[1] == .forYou, "mornings: the pick and breakfast ideas first: \(morning)")
+        let weeknight = HomeLayout.order(at: Moment(weekend: false, part: .evening), hasTonight: true, expiringToday: false, cooksAtThisMoment: true)
+        check(weeknight.prefix(3) == [.tonight, .rightNow, .cookNow], "weekday evenings: tonight's meal, the pick, Cook Now: \(weeknight)")
+        let weekend = HomeLayout.order(at: Moment(weekend: true, part: .midday), hasTonight: false, expiringToday: false, cooksAtThisMoment: true)
+        check(weekend.prefix(3) == [.rightNow, .tryNew, .world] && !weekend.contains(.tonight), "weekends: new dishes and world kitchens: \(weekend)")
+        let expiring = HomeLayout.order(at: Moment(weekend: true, part: .midday), hasTonight: false, expiringToday: true, cooksAtThisMoment: true)
+        check(expiring[1] == .useSoon, "food going off today comes second: \(expiring)")
+        let rarely = HomeLayout.order(at: Moment(weekend: false, part: .evening), hasTonight: false, expiringToday: false, cooksAtThisMoment: false)
+        check(rarely.last == .cookNow, "rarely cooks at this time: Cook Now moves down: \(rarely)")
+        check(Set(weekend + [.tonight]) == Set(HomeSection.allCases), "every section has a place")
+    }
+
     static func main() {
+        habits()
+        var tagged = RecipeDraft(); tagged.title = "Aash"; tagged.tags = ["null", "Kabul", "None"]
+        check(tagged.sanitized().tags == ["Kabul"], "\"null\" text is not a tag: \(tagged.sanitized().tags)")
         // Photo credits travel in the URL fragment (server: withCredit in services.js).
         let pexels = ImageCredit("https://images.pexels.com/2.jpg#credit=Photo%20by%20Asha%20on%20Pexels&credit_url=https%3A%2F%2Fpexels.com%2Fphoto%2F2")
         check(pexels?.text == "Photo by Asha on Pexels" && pexels?.link?.absoluteString == "https://pexels.com/photo/2", "pexels credit parsed: \(String(describing: pexels))")

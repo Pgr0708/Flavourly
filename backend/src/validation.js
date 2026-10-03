@@ -127,7 +127,41 @@ export const schemas = {
     // true: only look for a free photo (never GPT, not counted against the free plan).
     freeOnly: z.boolean().default(false),
   }),
-  discover: z.object({ country: countryCode }),
+  discover: z.object({
+    country: countryCode,
+    // A state, province or city ("Gujarat", "Tuscany"): from the phone's location or the world explorer.
+    region: text(60, { min: 2, letters: true }).optional().nullable(),
+  }),
+  regions: z.object({ country: countryCode }),
+  dishSuggest: z.object({
+    q: text(60, { min: 1 }),
+    country: countryCode.optional().nullable(),
+    region: text(60).optional().nullable(),
+  }),
+  dishFind: z.object({
+    name: text(80, { min: 2, letters: true }),
+    country: countryCode.optional().nullable(),
+    region: text(60).optional().nullable(),
+  }),
+  videos: z.object({ title: text(120, { min: 2, letters: true }) }),
+  variationCreate: z.object({
+    base: z.object({
+      title: text(120, { min: 2, letters: true }),
+      servings: z.number().int().min(1).max(100).optional().nullable(),
+      ingredients: z.array(text(200, { min: 1 })).min(1).max(80),
+      steps: z.array(text(1_000, { min: 1 })).max(60).default([]),
+      imageURL: z.string().url().max(600).optional().nullable(),
+    }),
+    change: text(200, { min: 3, letters: true }),
+    country: countryCode.optional().nullable(),
+    region: text(60).optional().nullable(),
+  }),
+  variationList: z.object({
+    title: text(120, { min: 2, letters: true }),
+    country: countryCode.optional().nullable(),
+    region: text(60).optional().nullable(),
+  }),
+  variationTried: z.object({ id: z.string().regex(/^\d{1,18}$/, 'must be a variation id') }),
   nutrition: z.object({
     lines: z.array(text(200, { min: 1 })).min(1, 'needs at least one ingredient').max(100, 'can have at most 100 ingredients'),
     servings: z.number().int().min(1).max(100).default(2),

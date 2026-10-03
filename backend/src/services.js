@@ -98,21 +98,24 @@ export function createPremium({ config, cache }) {
 // ─── Free-plan limits ───────────────────────────────────────────────────────────────────────
 
 export const FEATURES = {
-  importRecipe: { period: 'week', limit: 'FREE_IMPORTS_PER_WEEK', label: 'link imports' },
-  aiPlan: { period: 'week', limit: 'FREE_AI_PLANS_PER_WEEK', label: 'AI meal plans' },
-  aiIdeas: { period: 'week', limit: 'FREE_AI_IDEAS_PER_WEEK', label: 'AI recipe ideas' },
-  aiSwap: { period: 'week', limit: 'FREE_AI_SWAPS_PER_WEEK', label: 'AI swaps' },
-  aiImage: { period: 'week', limit: 'FREE_IMAGES_PER_WEEK', label: 'AI photos' },
-  extract: { period: 'day', limit: 'FREE_EXTRACTS_PER_DAY', label: 'AI recipe reads' },
+  importRecipe: { free: 'FREE_IMPORTS_PER_WEEK', premium: 'PREMIUM_IMPORTS_PER_WEEK', label: 'AI link imports' },
+  aiPlan: { free: 'FREE_AI_PLANS_PER_WEEK', premium: 'PREMIUM_AI_PLANS_PER_WEEK', label: 'AI meal plans' },
+  aiIdeas: { free: 'FREE_AI_IDEAS_PER_WEEK', premium: 'PREMIUM_AI_IDEAS_PER_WEEK', label: 'AI recipe ideas' },
+  aiSwap: { free: 'FREE_AI_SWAPS_PER_WEEK', premium: 'PREMIUM_AI_SWAPS_PER_WEEK', label: 'AI swaps' },
+  aiImage: { free: 'FREE_IMAGES_PER_WEEK', premium: 'PREMIUM_IMAGES_PER_WEEK', label: 'AI photos' },
+  extract: { free: 'FREE_EXTRACTS_PER_WEEK', premium: 'PREMIUM_EXTRACTS_PER_WEEK', label: 'AI recipe reads' },
+  dishAI: { free: 'FREE_DISH_AI_PER_WEEK', premium: 'PREMIUM_DISH_AI_PER_WEEK', label: 'new AI dishes' },
+  variation: { free: 'FREE_VARIATIONS_PER_WEEK', premium: 'PREMIUM_VARIATIONS_PER_WEEK', label: 'recipe variations' },
+  transcribeMinutes: { free: null, premium: 'PREMIUM_TRANSCRIBE_MINUTES_PER_WEEK', label: 'minutes of video listening' },
 };
 
 export function createUsage({ db, config, now = () => new Date() }) {
-  const period = (feature) => (FEATURES[feature].period === 'week' ? weekStart(now()) : dayStart(now()));
-  const limitOf = (feature) => config[FEATURES[feature].limit];
+  const period = () => weekStart(now());
+  const limitOf = (feature, premium) => config[FEATURES[feature][premium ? 'premium' : 'free']] ?? 0;
 
   return {
     async used(deviceId, feature) {
-      const [[row]] = await db.query('SELECT used FROM usage_counters WHERE device_id = ? AND feature = ? AND period_start = ?', [deviceId, feature, period(feature)]);
+      const [[row]] = await db.query('SELECT used FROM usage_counters WHERE device_id = ? AND feature = ? AND period_start = ?', [deviceId, feature, period()]);
       return row ? Number(row.used) : 0;
     },
 
@@ -120,28 +123,29 @@ export function createUsage({ db, config, now = () => new Date() }) {
     async summary(deviceId, premium) {
       const features = {};
       for (const feature of Object.keys(FEATURES)) {
-        features[feature] = { used: await this.used(deviceId, feature), limit: limitOf(feature), period: FEATURES[feature].period };
+        features[feature] = { used: await this.used(deviceId, feature), limit: limitOf(feature, premium), period: 'week' };
       }
       return { premium: Boolean(premium), features };
     },
 
-    /** Checked before the work; only successful work is counted (failures never cost a free use). */
+    /** Checked before the work; only successful work is counted (failures never cost a use). */
     async assertAllowed(deviceId, feature, premium) {
-      if (premium) return;
-      const limit = limitOf(feature);
+      const limit = limitOf(feature, premium);
+      if (!premium && limit === 0) {
+        throw new HttpError(403, 'AI features are part of Premium.', { code: 'premium' });
+      }
       if ((await this.used(deviceId, feature)) < limit) return;
-      const { label, period: span } = FEATURES[feature];
-      throw new HttpError(429, span === 'week'
-        ? `You've used this week's ${limit} free ${label}. They reset on Monday — or go Premium for unlimited.`
-        : `You've used today's ${limit} free ${label}. Try again tomorrow — or go Premium for unlimited.`, { code: 'limit' });
+      const { label } = FEATURES[feature];
+      throw new HttpError(429, premium
+        ? `You've used this week's ${limit} ${label}. They reset on Monday.`
+        : `You've used this week's ${limit} free ${label}. They reset on Monday — or go Premium for more.`, { code: 'limit' });
     },
 
-    async consume(deviceId, feature, premium) {
-      if (premium) return;
+    async consume(deviceId, feature, _premium, amount = 1) {
       try {
         await db.query(
-          'INSERT INTO usage_counters (device_id, feature, period_start, used) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE used = used + 1',
-          [deviceId, feature, period(feature)],
+          'INSERT INTO usage_counters (device_id, feature, period_start, used) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE used = used + ?',
+          [deviceId, feature, period(), amount, amount],
         );
       } catch (error) {
         if (String(error.code).startsWith('ER_NO_REFERENCED_ROW')) throw new HttpError(401, 'Your device session expired. Please try again.');
@@ -156,8 +160,10 @@ export function createUsage({ db, config, now = () => new Date() }) {
 export function createImporter({ config, fetcher, ai, cache, nutrition = { enrich: async (draft) => draft } }) {
   const complete = (recipe) => Boolean(recipe?.ingredients?.length && recipe?.steps?.length);
 
-  async function extract({ text, kind, sourceURL }) {
+  /** `gate` runs before any new AI read (it throws when the cook can't use AI); cached reads are free. */
+  async function extract({ text, kind, sourceURL, gate }) {
     const key = `extract:v2:${sha256(`${kind}|${sourceURL ?? ''}|${text}`)}`;
+    if (gate && !(await cache.get(key))) await gate();
     const { value } = await cache.wrap(key, 7 * DAY, () => ai.json(tasks.extract({ text, kind, sourceURL })));
     if (!value?.found || !value.recipe?.ingredients?.length) {
       throw new HttpError(422, "We couldn't find a recipe in that. Try pasting the recipe text, or a screenshot of it.");
@@ -205,7 +211,7 @@ export function createImporter({ config, fetcher, ai, cache, nutrition = { enric
     return { recipe: draft, via, notes: allNotes.map((note) => short(note, 200)).filter(Boolean).slice(0, 5) };
   }
 
-  async function fresh(url, platform, pageText) {
+  async function fresh(url, platform, pageText, gate) {
     const name = PLATFORM_NAMES[platform] ?? new URL(url).hostname.replace(/^www\./, '');
     if (platform === 'web') {
       let page = null;
@@ -217,7 +223,7 @@ export function createImporter({ config, fetcher, ai, cache, nutrition = { enric
       }
       const text = (pageText ?? page.text ?? '').slice(0, 15_000);
       if (text.length < 40) throw new HttpError(422, "That page didn't include a recipe we could read. Try pasting the recipe text.");
-      const found = await extract({ text, kind: 'text', sourceURL: url });
+      const found = await extract({ text, kind: 'text', sourceURL: url, gate });
       const base = page?.recipe ?? {};
       return reply({ ...base, ...found.recipe, title: found.recipe.title || base.title, imageURL: base.imageURL },
         { via: 'page', notes: found.notes, sourceURL: url, sourceName: page?.page.siteName ?? name, imageURL: page?.page.image });
@@ -246,7 +252,7 @@ export function createImporter({ config, fetcher, ai, cache, nutrition = { enric
     if (caption.length < 20) {
       throw new HttpError(422, `${name} didn't share a caption for this post. If it's public, copy the caption and paste it in the Text tab — or save or screen-record the video and add it in the Video tab.`, { code: 'no_caption' });
     }
-    const found = await extract({ text: caption.slice(0, 12_000), kind: 'caption', sourceURL: url }).catch((error) => {
+    const found = await extract({ text: caption.slice(0, 12_000), kind: 'caption', sourceURL: url, gate }).catch((error) => {
       // The recipe is often only spoken in the video: point to the Video tab instead of a dead end.
       if (error.status === 422) throw new HttpError(422, `The ${name} ${platform === 'youtube' ? 'description' : 'caption'} doesn't include the recipe — it's probably spoken in the video. Save or screen-record the video and add it in the Video tab.`, { code: 'no_caption' });
       throw error;
@@ -258,12 +264,13 @@ export function createImporter({ config, fetcher, ai, cache, nutrition = { enric
   }
 
   return {
-    async importLink({ url, pageText }) {
+    /** Recipe cards and creators' websites need no AI; captions and plain pages call `gate` first. */
+    async importLink({ url, pageText }, { gate } = {}) {
       const canonical = canonicalize(url);
       const platform = platformOf(canonical);
       const key = `import:v2:${sha256(`${canonical}|${pageText ? sha256(pageText) : ''}`)}`;
       const { value } = await cache.wrap(key, 7 * DAY, async () => {
-        const result = await fresh(canonical, platform, pageText);
+        const result = await fresh(canonical, platform, pageText, gate);
         return { ...result, recipe: await nutrition.enrich(result.recipe) };
       });
       return value;
@@ -366,6 +373,21 @@ export function describesDish(dish, text) {
   const stem = (w) => w.slice(0, Math.max(3, w.length - 2));
   const found = wanted.filter((w) => have.some((h) => h.startsWith(stem(w)) || w.startsWith(stem(h))));
   return found.length / wanted.length >= 0.6;
+}
+
+/**
+ * What to search photo sources for, best first: the dish's own name ("Khubz (Afghan Bread)" → "Khubz"), then
+ * the English in brackets, whole and in parts — "粥 (Congee)" → "Congee", "饺子 (Jiǎozi - Dumplings)" →
+ * "Jiǎozi - Dumplings", "Jiǎozi", "Dumplings". Names in non-Latin scripts alone find nothing, so they're skipped.
+ */
+export function photoQueries(title) {
+  const outside = title.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const inside = [...title.matchAll(/\(([^)]*)\)/g)].map((m) => m[1].trim());
+  const parts = inside.flatMap((text) => text.split(/\s[-–—]\s|[,;/]/).map((p) => p.trim()));
+  const seen = new Set();
+  return [outside, ...inside, ...parts]
+    .filter((q) => q && photoWords(q).length && !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()))
+    .slice(0, 4);
 }
 
 /** Adds the licence credit to an image URL's fragment. */
@@ -491,12 +513,14 @@ export function createImages({ config, ai, cache, fetcher, http = fetch }) {
 
       // A recent miss: don't ask every free API again for a few days.
       if (!(await cache.get(missKey(title)))) {
-        for (const [name, find] of sources) {
-          const found = await attempt(name, title, () => find(title));
-          if (found) {
-            await cache.set(foundKey(title), { url: found }, 30 * DAY);
-            log.info('free photo found', { title, source: name });
-            return { url: found };
+        for (const query of photoQueries(title)) {
+          for (const [name, find] of sources) {
+            const found = await attempt(name, title, () => find(query));
+            if (found) {
+              await cache.set(foundKey(title), { url: found }, 30 * DAY);
+              log.info('free photo found', { title, query, source: name });
+              return { url: found };
+            }
           }
         }
         await cache.set(missKey(title), { at: Date.now() }, 3 * DAY);
@@ -528,11 +552,13 @@ export function createDiscover({ ai, cache, config, images, fetcher, nutrition =
   const slug = (title) => title.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
   const words = (list, max, length) => [...new Set((list ?? []).map((item) => short(item, length)).filter(Boolean))].slice(0, max);
 
-  async function build(code, country) {
+  async function build(code, country, region) {
     const [kitchen, ...groups] = await Promise.allSettled([
-      ai.json(localTasks.kitchen({ country })),
-      ...LOCAL_GROUPS.map((group) => ai.json(localTasks.dishes({ country, ...group }))),
+      ai.json(localTasks.kitchen({ country, region })),
+      ...LOCAL_GROUPS.map((group) => ai.json(localTasks.dishes({ country, region, ...group }))),
     ]);
+    const place = region ? `${region}, ${country}` : country;
+    const idPrefix = `local-${code.toLowerCase()}-${region ? `${slug(region)}-` : ''}`;
     const cuisine = (kitchen.status === 'fulfilled' && short(kitchen.value.cuisine, 40)) || country;
     const seen = new Set();
     let dishes = [];
@@ -540,26 +566,29 @@ export function createDiscover({ ai, cache, config, images, fetcher, nutrition =
       if (group.status !== 'fulfilled') continue;
       for (const { recipe, region } of group.value.dishes ?? []) {
         const draft = toDraft(recipe, { method: 'local', cuisine });
-        const key = slug(draft.title ?? '');
+        // "Kabuli Pulao (Afghan Pilaf)" and "Kabuli Pulao (Afghan Rice Pilaf)" are the same dish.
+        const key = slug((draft.title ?? '').replace(/\([^)]*\)/g, ' '));
         if (!key || seen.has(key) || draft.ingredients.length < 2 || draft.steps.length < 1) continue;
         seen.add(key);
-        const where = short(region, 30);
+        // The model sometimes writes "null"/"none" as text instead of leaving the region out.
+        const where = /^(null|none|n\/?a|unknown|-)$/i.test(String(region ?? '').trim()) ? undefined : short(region, 30);
         if (where && !draft.tags.includes(where)) draft.tags = [where, ...draft.tags].slice(0, 20);
-        dishes.push({ ...draft, remoteID: `local-${code.toLowerCase()}-${key}` });
+        dishes.push({ ...draft, remoteID: `${idPrefix}${key}` });
       }
     }
-    dishes = await knownDishes(dishes, country);
+    dishes = await knownDishes(dishes, place);
     for (let i = 0; i < dishes.length; i += 3) {
       const batch = await Promise.all(dishes.slice(i, i + 3).map((dish) => nutrition.enrich(dish)));
       dishes.splice(i, batch.length, ...batch);
     }
     if (dishes.length < 6) {
       const failed = groups.find((group) => group.status === 'rejected');
-      throw failed?.reason instanceof HttpError ? failed.reason : new HttpError(502, `We couldn't load dishes from ${country} right now. Please try again.`);
+      throw failed?.reason instanceof HttpError ? failed.reason : new HttpError(502, `We couldn't load dishes from ${place} right now. Please try again.`);
     }
     return {
       country: code,
-      name: country,
+      region: region ?? null,
+      name: place,
       cuisine,
       staples: kitchen.status === 'fulfilled' ? words(kitchen.value.staples, 30, 40) : [],
       cravings: kitchen.status === 'fulfilled' ? words(kitchen.value.cravings, 12, 30) : [],
@@ -600,39 +629,83 @@ export function createDiscover({ ai, cache, config, images, fetcher, nutrition =
     return kept;
   }
 
-  async function paint(catalog) {
-    if (!(await cache.lock(`discover:paint:${catalog.country}`, 20 * 60))) return; // another worker is on it
+  /**
+   * Fills in dish photos in the background, one at a time. Free sources first; GPT only for a country's own
+   * list when photos are on — region lists (there can be hundreds) use free photos only, to keep cost flat.
+   */
+  async function paint(catalog, lockKey) {
+    if (!(await cache.lock(`discover:paint:${lockKey}`, 20 * 60))) return; // another worker is on it
+    // Background photos never use GPT (cost): free sources only. GPT is only for an explicit "Create a photo".
+    const freeOnly = true;
     for (const dish of catalog.dishes) {
       if (await images.existing(dish.title)) continue;
       const failKey = `paintfail:${sha256(dish.title.toLowerCase())}`;
       if (Number(await cache.get(failKey) ?? 0) >= 3) continue; // tried 3 times today; try again tomorrow
       try {
-        await images.recipePhoto({ title: dish.title, description: [dish.summary, `${catalog.cuisine} home cooking`].filter(Boolean).join(' — ') });
+        await images.recipePhoto({ title: dish.title, freeOnly, description: [dish.summary, `${catalog.cuisine} home cooking`].filter(Boolean).join(' — ') });
       } catch (error) {
-        log.warn('local photo failed', { country: catalog.country, title: dish.title, error: error.message });
+        if (error.status !== 404) log.warn('local photo failed', { place: lockKey, title: dish.title, error: error.message });
         if (error.status === 503 || error.status === 501) break; // AI down or photos off: stop, retry on a later request
         await cache.incr(failKey, DAY);
       }
     }
-    await cache.del(`discover:paint:${catalog.country}`);
+    await cache.del(`discover:paint:${lockKey}`);
   }
 
+  const withPhotos = (dishes) => Promise.all(dishes.map(async (dish) => ({ ...dish, imageURL: (await images.existing(dish.title)) ?? dish.imageURL })));
+
   return {
-    async local({ country: code }) {
+    /** One shared catalogue per country, or per region of a country ("IN" + "Gujarat"). */
+    async local({ country: code, region, deviceId, premium = true }) {
       const country = countryName(code);
-      const key = `discover:v2:${code}`;
+      const place = region ? `${code}:${slug(region)}` : code;
+      // v4: recipes with complete ingredient lists and detailed steps.
+      const key = region ? `discover:v4:${place}` : `discover:v4:${code}`;
       let value = await cache.get(key);
+      if (!value && !premium && !building.has(place)) {
+        throw new HttpError(403, 'New places are built with AI, which is part of Premium. Places others opened are free.', { code: 'premium' });
+      }
       if (!value) {
-        if (!building.has(code)) {
-          building.set(code, cache.wrap(key, 30 * DAY, () => build(code, country)).finally(() => building.delete(code)));
+        // A new region costs an AI build (~$0.02): a few per device a day is plenty for real exploring.
+        if (region && deviceId != null && !building.has(place)
+          && (await cache.incr(`regionbuilds:${deviceId}:${dayStart()}`, DAY)) > config.REGION_BUILDS_PER_DAY) {
+          throw new HttpError(429, "You've opened lots of new regions today. Try again tomorrow — regions you've already opened still work.", { code: 'rate_limit' });
         }
-        value = (await building.get(code)).value;
+        if (!building.has(place)) {
+          building.set(place, cache.wrap(key, 30 * DAY, () => build(code, country, region)).finally(() => building.delete(place)));
+        }
+        value = (await building.get(place)).value;
       }
-      const dishes = await Promise.all(value.dishes.map(async (dish) => ({ ...dish, imageURL: (await images.existing(dish.title)) ?? dish.imageURL })));
-      if (config.IMAGE_GENERATION && dishes.some((dish) => !dish.imageURL)) {
-        paint(value).catch((error) => log.warn('local photos stopped', { country: code, error: error.message }));
+      const dishes = await withPhotos(value.dishes);
+      if (dishes.some((dish) => !dish.imageURL)) {
+        paint(value, place).catch((error) => log.warn('local photos stopped', { place, error: error.message }));
       }
-      return { ...value, dishes };
+      return { ...value, region: value.region ?? null, dishes };
+    },
+
+    /** A country's famous regional cuisines for the world explorer, each with its signature dish's photo when known. */
+    async regions({ country: code, premium = true }) {
+      const country = countryName(code);
+      if (!premium && !(await cache.get(`regions:v1:${code}`))) {
+        throw new HttpError(403, "This country's regions are built with AI, which is part of Premium.", { code: 'premium' });
+      }
+      const { value } = await cache.wrap(`regions:v1:${code}`, 90 * DAY, async () => {
+        const result = await ai.json(localTasks.regions({ country }));
+        const seen = new Set();
+        const regions = (result.regions ?? []).map((r) => ({ name: short(r.name, 60), about: short(r.about, 120) ?? '', signature: short(r.signature, 80) ?? '' }))
+          .filter((r) => r.name && r.name.toLowerCase() !== country.toLowerCase() && !seen.has(r.name.toLowerCase()) && seen.add(r.name.toLowerCase()));
+        return { country: code, name: country, regions: regions.slice(0, 10) };
+      });
+      const regions = await Promise.all(value.regions.map(async (r) => ({ ...r, imageURL: r.signature ? await images.existing(r.signature) : null })));
+      // Signature-dish photos: free sources only, in the background.
+      const missing = regions.filter((r) => r.signature && !r.imageURL);
+      if (missing.length && (await cache.lock(`regions:paint:${code}`, 10 * 60))) {
+        (async () => {
+          for (const r of missing) await images.recipePhoto({ title: r.signature, freeOnly: true }).catch(() => {});
+          await cache.del(`regions:paint:${code}`);
+        })().catch(() => {});
+      }
+      return { ...value, regions };
     },
   };
 }

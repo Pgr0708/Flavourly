@@ -1,5 +1,7 @@
 import { createOpenAI } from './ai/openai.js';
 import { createApp } from './app.js';
+import { createDishes } from './dishes.js';
+import { createVariations } from './variations.js';
 import { createCache } from './cache.js';
 import { createPool } from './db.js';
 import { createFetcher } from './fetcher.js';
@@ -23,5 +25,7 @@ export function build(config, { fetcher: customFetcher, now, http } = {}) {
     images: createImages({ config, ai, cache, fetcher }),
   };
   deps.discover = createDiscover({ ai, cache, config, images: deps.images, fetcher, nutrition });
+  deps.dishes = createDishes({ db, ai, cache, config, fetcher, nutrition, images: deps.images, usage: deps.usage });
+  deps.variations = createVariations({ db, ai, nutrition, images: deps.images, usage: deps.usage });
   return { ...deps, app: createApp(deps) };
 }

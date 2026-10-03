@@ -4,7 +4,7 @@ import { setup } from './helpers.js';
 
 // Premium video listening: the app sends only the audio of a video the user picked.
 let t;
-before(async () => { t = await setup({ env: { TRANSCRIBE_PER_DAY: '2', TRANSCRIBE_MAX_MB: '1' } }); });
+before(async () => { t = await setup({ env: { PREMIUM_TRANSCRIBE_MINUTES_PER_WEEK: '2', TRANSCRIBE_MAX_MB: '1' } }); });
 after(() => t.teardown());
 
 const audio = (size = 4_000, marker = '') => Buffer.concat([Buffer.from(marker), Buffer.alloc(size, 7)]);
@@ -37,12 +37,13 @@ describe('POST /v1/ai/transcribe', () => {
     assert.equal(silent.status, 422);
     assert.match(silent.body.error, /couldn't hear a recipe/);
   });
-  it('a daily cap per device keeps the bill bounded, even for Premium', async () => {
+  it('a weekly minutes cap per device keeps the bill bounded, even for Premium', async () => {
     const token = await t.register();
-    assert.equal((await send(token, audio())).status, 200);
+    assert.equal((await send(token, audio())).status, 200, 'a short clip counts as 1 minute');
     assert.equal((await send(token, audio())).status, 200);
     const third = await send(token, audio());
     assert.equal(third.status, 429);
-    assert.equal(third.body.code, 'rate_limit');
+    assert.equal(third.body.code, 'limit');
+    assert.match(third.body.error, /2 minutes of video listening.*Monday/);
   });
 });

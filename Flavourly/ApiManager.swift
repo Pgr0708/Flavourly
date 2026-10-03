@@ -186,16 +186,19 @@ enum Keychain {
     }
 }
 
-/// Free-plan counters mirrored on the device (the server is the source of truth).
+/// Weekly AI counters mirrored on the device (the server is the source of truth). Free has no AI;
+/// Premium has weekly caps that keep the AI bill bounded.
 enum Feature: String, CaseIterable, Codable {
-    case importRecipe, aiPlan, aiIdeas, aiSwap
+    case importRecipe, aiPlan, aiIdeas, aiSwap, variation
 
-    var weeklyFree: Int {
+    /// Fallbacks until the server's numbers arrive.
+    var weeklyPremium: Int {
         switch self {
-        case .importRecipe: 5
-        case .aiPlan: 1
-        case .aiIdeas: 5
-        case .aiSwap: 10
+        case .importRecipe: 40
+        case .aiPlan: 7
+        case .aiIdeas: 40
+        case .aiSwap: 60
+        case .variation: 15
         }
     }
 
@@ -205,6 +208,7 @@ enum Feature: String, CaseIterable, Codable {
         case .aiPlan: "AI plans"
         case .aiIdeas: "AI recipe ideas"
         case .aiSwap: "AI swaps"
+        case .variation: "recipe variations"
         }
     }
 }
@@ -227,34 +231,35 @@ enum Usage {
 
     static func used(_ feature: Feature) -> Int { ledger[weekKey]?[feature.rawValue] ?? 0 }
 
-    /// The server's own limits (they're configurable there); the built-in numbers are only a fallback.
-    private static var limits: [String: Int] {
-        get { (UserDefaults.standard.dictionary(forKey: "usageLimits") as? [String: Int]) ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: "usageLimits") }
+    /// The server's own limits per plan (they're configurable there); the built-in numbers are only a fallback.
+    private static func limitsKey(premium: Bool) -> String { premium ? "usageLimitsPremium" : "usageLimits" }
+    private static func limits(premium: Bool) -> [String: Int] {
+        (UserDefaults.standard.dictionary(forKey: limitsKey(premium: premium)) as? [String: Int]) ?? [:]
     }
 
-    static func limit(_ feature: Feature) -> Int { limits[feature.rawValue] ?? feature.weeklyFree }
-
-    static func remaining(_ feature: Feature) -> Int {
-        SettingsManager.shared.isPremium ? .max : max(0, limit(feature) - used(feature))
+    static func limit(_ feature: Feature) -> Int {
+        let premium = SettingsManager.shared.isPremium
+        return limits(premium: premium)[feature.rawValue] ?? (premium ? feature.weeklyPremium : 0)
     }
+
+    static func remaining(_ feature: Feature) -> Int { max(0, limit(feature) - used(feature)) }
 
     /// Replaces the local guesses with the server's counters, so a reinstall, a failed reply or a
     /// second phone never shows "2 left" when the server says 0. Called on launch and on foreground.
     static func sync() async {
         struct Empty: Encodable {}
         struct Counter: Decodable { let used: Int; let limit: Int }
-        struct Reply: Decodable { let features: [String: Counter] }
+        struct Reply: Decodable { let premium: Bool; let features: [String: Counter] }
         guard let reply = try? await APIClient.shared.post(Apis.usage, Empty(), as: Reply.self) else { return }
         var all = ledger
-        var newLimits = limits
+        var newLimits = limits(premium: reply.premium)
         for feature in Feature.allCases {
             guard let counter = reply.features[feature.rawValue] else { continue }
             all[weekKey, default: [:]][feature.rawValue] = counter.used
             newLimits[feature.rawValue] = counter.limit
         }
         ledger = all
-        limits = newLimits
+        UserDefaults.standard.set(newLimits, forKey: limitsKey(premium: reply.premium))
     }
 
     static func canUse(_ feature: Feature) -> Bool { remaining(feature) > 0 }

@@ -90,5 +90,11 @@ export function createOpenAI({ apiKey, model, baseUrl, timeoutMs }) {
     return String(reply?.text ?? '').trim();
   }
 
-  return { json, image, transcribe, get configured() { return Boolean(apiKey); } };
+  /** Free OpenAI moderation: true when the text breaks the content rules (checked before anything is shared). */
+  async function flagged(text) {
+    const reply = await call('/moderations', { model: 'omni-moderation-latest', input: String(text).slice(0, 4_000) }, { attempts: 2 });
+    return Boolean(reply?.results?.[0]?.flagged);
+  }
+
+  return { json, image, transcribe, flagged, get configured() { return Boolean(apiKey); } };
 }

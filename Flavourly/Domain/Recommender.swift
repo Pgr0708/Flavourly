@@ -113,6 +113,12 @@ struct RankContext {
     /// Learned from what this cook makes and rates (set by the app after cooking).
     var taste: TasteProfile = RankContext.taste
     nonisolated(unsafe) static var taste = TasteProfile()
+    /// Learned from activity: when/how long they cook, searches, skips, locks, moods (set by the app).
+    var habits: Habits = RankContext.habits
+    nonisolated(unsafe) static var habits = Habits()
+    /// How the cook feels now (chip on Home, or guessed). Planning for other days sets this to nil.
+    var mood: Mood? = RankContext.mood
+    nonisolated(unsafe) static var mood: Mood?
 }
 
 struct Ranked: Identifiable {
@@ -198,6 +204,9 @@ enum Recommender {
         let learned = context.taste.score(recipe)
         score += learned.boost
         if let reason = learned.reason, recipe.cookedCount == 0, reasons.count < 3 { reasons.insert(reason, at: 0) }
+        let habit = context.habits.boost(for: recipe, mood: context.mood, at: context.now, taste: context.taste, localCuisine: context.localCuisine)
+        score += habit.boost
+        if let reason = habit.reason, reasons.count < 3 { reasons.insert(reason, at: 0) }
         if recipe.isFavorite { score += 0.8 }
         if let cuisine = recipe.cuisine, context.cuisines.contains(where: { $0.caseInsensitiveCompare(cuisine) == .orderedSame }) {
             score += 0.6

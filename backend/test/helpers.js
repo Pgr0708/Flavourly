@@ -31,7 +31,8 @@ export async function stopRedis() {
   redisServer = null;
 }
 
-export async function setup({ env = {}, fetcher, now, redisUrl = '', database } = {}) {
+/** `user`: a RevenueCat id sent with every call that doesn't name one ("premium-…" = subscribed). */
+export async function setup({ env = {}, fetcher, now, redisUrl = '', database, user } = {}) {
   const name = database ?? `flavourly_test_${crypto.randomBytes(4).toString('hex')}`;
   const admin = await mysql.createConnection(DB);
   await admin.query(`CREATE DATABASE IF NOT EXISTS \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
@@ -63,6 +64,7 @@ export async function setup({ env = {}, fetcher, now, redisUrl = '', database } 
       headers: {
         ...(body !== undefined || raw !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(user ? { 'X-RC-App-User': user } : {}),
         ...headers,
       },
       body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),

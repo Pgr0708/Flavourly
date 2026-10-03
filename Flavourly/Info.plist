@@ -11,13 +11,15 @@
 	<string>Scan recipe pages from your cookbooks and product barcodes for your pantry.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Save the meals you log (calories, protein, carbohydrates and fat) to Apple Health.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Flavourly shows popular home dishes from your area. Only your country and state are used — never your exact location.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Listen to the audio of cooking videos you choose, on your iPhone, to write down the recipe.</string>
-	<key>UIUserInterfaceStyle</key>
-	<string>Light</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Pacifico-Regular.ttf</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 </dict>
 </plist>

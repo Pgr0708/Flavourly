@@ -186,8 +186,7 @@ struct PlannerView: View {
     @ViewBuilder
     private var aiCard: some View {
         if Usage.canUse(.aiPlan) {
-            ToggleRow(title: "Let AI choose", subtitle: settings.isPremium ? "Balances variety, time and your goals" :
-                        "\(Usage.remaining(.aiPlan)) free AI plan left this week · works offline without it",
+            ToggleRow(title: "Let AI choose", subtitle: "Balances variety, time and your goals · \(Usage.remaining(.aiPlan)) AI plans left this week",
                       systemImage: "sparkles", tint: Theme.ai, isOn: $useAI)
                 .card(padding: 8)
         } else {
@@ -195,7 +194,8 @@ struct PlannerView: View {
                 IconTile(systemImage: "sparkles", tint: Theme.ai, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Smart planning is on").font(.system(size: 14, weight: .semibold))
-                    Text("This week's free AI plan is used — we'll plan with your rules and history instead.")
+                    Text(settings.isPremium ? "This week's AI plans are used — we'll plan with your rules and history instead."
+                         : "We plan with your rules and history. AI planning is part of Premium.")
                         .font(Theme.micro).foregroundStyle(Theme.muted)
                 }
                 Spacer(minLength: 0)
@@ -307,6 +307,11 @@ struct PlannerView: View {
             weeknightMax = Int(limit.prefix { $0.isNumber })
             weekendMax = weeknightMax.map { max($0, 45) }
         }
+        // What this cook really spends on weekday and weekend dinners, once the app has seen enough.
+        let habits = Personalizer.shared.habits
+        let snap = { (minutes: Int) in [15, 20, 30, 45, 60].first { minutes <= $0 } ?? 90 }
+        if let weekday = habits.minutesAt[Moment(weekend: false, part: .evening)] { weeknightMax = snap(Int(weekday * habits.pace)) }
+        if let weekend = habits.minutesAt[Moment(weekend: true, part: .evening)] { weekendMax = snap(Int(weekend * habits.pace)) }
         let modes = prefs.choices["modes"] ?? []
         leftovers = modes.isEmpty || modes.contains("Leftovers") || modes.contains("Batch cooking")
         styles = Set(prefs.choices["planTypes"] ?? [])
@@ -458,6 +463,7 @@ struct PlannerView: View {
     }
 
     private func shuffle(_ proposal: Proposal) {
+        Personalizer.shared.record(.skip, recipe: proposal.recipe.key) // swapped away: rank it lower next time
         guard var current = proposals, let index = current.firstIndex(where: { $0.id == proposal.id }) else { return }
         var context = baseContext
         context.slot = proposal.pick.slot.slot

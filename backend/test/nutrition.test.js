@@ -148,7 +148,7 @@ describe('verified nutrition', () => {
 describe('/v1/nutrition and /v1/usage', () => {
   let t;
   let token;
-  before(async () => { t = await setup(); token = await t.register(); });
+  before(async () => { t = await setup({ env: { FREE_EXTRACTS_PER_WEEK: '5' } }); token = await t.register(); });
   after(() => t.teardown());
 
   it('recalculates nutrition for edited ingredient lines', async () => {
@@ -177,7 +177,12 @@ describe('/v1/nutrition and /v1/usage', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.premium, false);
     assert.equal(res.body.features.extract.used, 1, 'the scan above was counted');
-    assert.deepEqual(Object.keys(res.body.features).sort(), ['aiIdeas', 'aiImage', 'aiPlan', 'aiSwap', 'extract', 'importRecipe']);
+    assert.equal(res.body.features.extract.limit, 5);
+    assert.equal(res.body.features.aiIdeas.limit, 0, 'free plan: no AI ideas');
+    assert.deepEqual(Object.keys(res.body.features).sort(), ['aiIdeas', 'aiImage', 'aiPlan', 'aiSwap', 'dishAI', 'extract', 'importRecipe', 'transcribeMinutes', 'variation']);
+    const premium = await t.api('/v1/usage', {}, { token, headers: { 'X-RC-App-User': 'premium-usage' } });
+    assert.equal(premium.body.features.aiIdeas.limit, 40, 'Premium: weekly cap');
+    assert.equal(premium.body.features.transcribeMinutes.limit, 60);
   });
 });
 
@@ -192,7 +197,7 @@ describe('local dishes are checked against Wikipedia', () => {
     return { query: { search: [{ title: query.replace(/ India food$/, '') }] } };
   };
   before(async () => {
-    t = await setup({ fetcher: stubFetcher({ 'https://en.wikipedia.org/w/api.php': wiki }), env: { RATE_LIMIT_PER_MINUTE: '1000' } });
+    t = await setup({ user: 'premium-wiki', fetcher: stubFetcher({ 'https://en.wikipedia.org/w/api.php': wiki }), env: { RATE_LIMIT_PER_MINUTE: '1000' } });
     token = await t.register();
   });
   after(() => t.teardown());

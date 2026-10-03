@@ -8,7 +8,7 @@ const { createImages } = await import('../src/services.js');
 const config = { ...loadConfig(), IMAGE_GENERATION: false };
 const cache = createCache({});
 const images = createImages({ config, ai: null, cache, fetcher: createFetcher({ userAgent: config.FETCH_USER_AGENT }) });
-const dishes = ['Teriyaki chicken casserole', 'Lasagne', 'Beef Wellington', 'Peanut noodle bowl', 'Khow suey', 'Pav bhaji', 'Masala dosa', 'Paneer tikka', 'Chole bhature', 'Butter chicken', 'Pad thai', 'Shakshuka', 'Spaghetti carbonara', 'Garlic butter noodles', 'Aloo paratha', 'Grandma special lentil stew', 'Quick masala omelette'];
+const dishes = ['粥 (Congee)', '饺子 (Jiǎozi - Dumplings)', '月饼 (Yuèbǐng - Mooncake)', '粽子 (Zòngzi - Rice Dumplings)', '炸春卷 (Fried Spring Rolls)', '煎饼果子 (Chinese Crepes with Fried Dough)', '麻辣豆腐 (Spicy Tofu)', '炒米粉 (Fried Rice Noodles)', 'Aloo Puri', 'Khubz (Afghan Bread)'];
 let free = 0;
 for (const title of dishes) {
   try {

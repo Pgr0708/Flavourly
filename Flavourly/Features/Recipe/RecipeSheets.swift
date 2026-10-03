@@ -227,14 +227,15 @@ struct SubstituteSheet: View {
         if remaining > 0 {
             PrimaryButton(title: aiOptions.isEmpty ? "Ask AI for more ideas" : "Ask AI again",
                           systemImage: "sparkles", tone: .ai, isLoading: loading, height: 48) { askAI() }
-            if !settings.isPremium {
-                Text("\(remaining) free AI swaps left this week").font(Theme.micro).foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
-            }
+            Text("\(remaining) AI swaps left this week").font(Theme.micro).foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
+        } else if settings.isPremium {
+            Text("You've used this week's AI swaps. Quick swaps above always stay free.")
+                .font(Theme.micro).foregroundStyle(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
         } else {
             VStack(spacing: 8) {
-                Text("You've used this week's free AI swaps. Quick swaps above always stay free.")
+                Text("Quick swaps above are free. AI swap ideas are part of Premium.")
                     .font(Theme.micro).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-                PrimaryButton(title: "Unlock unlimited AI", systemImage: "crown.fill", tone: .premium, height: 46) { showPaywall = true }
+                PrimaryButton(title: "Unlock AI with Premium", systemImage: "crown.fill", tone: .premium, height: 46) { showPaywall = true }
             }
         }
     }
@@ -251,6 +252,9 @@ struct SubstituteSheet: View {
             } catch APIError.limit(let message) {
                 Usage.exhaust(.aiSwap)
                 DropsManager.showWarning(title: "Weekly limit reached", subtitle: message)
+            } catch APIError.premiumRequired {
+                Usage.exhaust(.aiSwap)
+                showPaywall = true
             } catch {
                 DropsManager.showError(title: "Couldn't reach AI", subtitle: "Quick swaps still work offline")
             }

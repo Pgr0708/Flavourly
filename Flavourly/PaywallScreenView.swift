@@ -28,7 +28,7 @@ struct PaywallScreenView: View {
 
     private let gold = Color(hex: "#FFD674")
     private let benefits: [PremiumBenefit] = [
-        .init(symbol: "doc.text.fill", title: "Unlimited recipe imports", detail: "Save recipes from anywhere", color: Color(hex: "#F9C34E")),
+        .init(symbol: "doc.text.fill", title: "AI imports & Make it my way", detail: "Instagram, TikTok, YouTube — or remix any dish", color: Color(hex: "#F9C34E")),
         .init(symbol: "wand.and.stars", title: "AI meal plans", detail: "Personalized to your goals & preferences", color: Color(hex: "#A7DD65")),
         .init(symbol: "cart.fill", title: "Smart grocery lists", detail: "Organized, flexible and budget-friendly", color: Color(hex: "#F6A65A")),
         .init(symbol: "heart.text.square.fill", title: "Nutrition tracking", detail: "Make healthier choices with ease", color: Color(hex: "#F07480")),

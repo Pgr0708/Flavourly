@@ -30,7 +30,8 @@ final class ResponseCache {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let data = (try? encoder.encode(body)) ?? Data()
-        return SHA256.hash(data: Data(path.utf8) + data).map { String(format: "%02x", $0) }.joined()
+        // The server is part of the key: answers from a local test server never show up against production.
+        return SHA256.hash(data: Data((Apis.baseURL.absoluteString + path).utf8) + data).map { String(format: "%02x", $0) }.joined()
     }
 
     func value<T: Decodable>(_ type: T.Type, for key: String) -> T? {

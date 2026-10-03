@@ -41,7 +41,10 @@ struct CookFlowView: View {
             }
         }
         .animation(Theme.spring, value: finished)
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = settings.keepScreenOn }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = settings.keepScreenOn
+            Personalizer.shared.startedCooking(recipe)
+        }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             timers.forEach { NotificationService.shared.cancelTimer(id: $0.id.uuidString) }

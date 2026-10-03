@@ -7,6 +7,7 @@ import { setup, stubFetcher, waitFor } from './helpers.js';
 const RULES = { allergies: ['Peanuts'], diets: ['Vegetarian'], dislikes: ['mushrooms'], mildOnly: false };
 const RECIPE_TEXT = 'Tomato soup\nIngredients\n- 4 tomatoes\n- 1 onion\n- 500 ml stock\nMethod\n1. Fry the onion for 5 min\n2. Simmer for 20 min';
 
+const PREMIUM = { 'X-RC-App-User': 'premium-tests' };
 let t;
 let clock = new Date('2026-10-06T10:00:00Z'); // a Tuesday
 before(async () => {
@@ -15,7 +16,7 @@ before(async () => {
     fetcher: stubFetcher({
       'https://www.tiktok.com/oembed': { json: { title: 'Garlic noodles 🍜\nIngredients\n200 g noodles\n4 cloves garlic\nMethod\n1. Boil the noodles for 5 min\n2. Toss with garlic', author_name: 'noodlequeen', thumbnail_url: 'https://p16.example/thumb.jpg' } },
     }),
-    env: { FREE_IMPORTS_PER_WEEK: '3', FREE_AI_SWAPS_PER_WEEK: '2', FREE_EXTRACTS_PER_DAY: '50', RATE_LIMIT_PER_MINUTE: '1000' },
+    env: { FREE_IMPORTS_PER_WEEK: '3', FREE_AI_SWAPS_PER_WEEK: '2', FREE_AI_IDEAS_PER_WEEK: '100', FREE_AI_PLANS_PER_WEEK: '100', FREE_IMAGES_PER_WEEK: '100', FREE_EXTRACTS_PER_WEEK: '50', RATE_LIMIT_PER_MINUTE: '1000', REGION_BUILDS_PER_DAY: '3', REGISTRATIONS_PER_HOUR: '200' },
   });
 });
 after(() => t.teardown());
@@ -209,7 +210,7 @@ describe('free limits and Premium', () => {
     for (let i = 0; i < 3; i += 1) assert.equal((await tiktok(100 + i)).status, 200, 'the failure did not use a free import');
     const blocked = await tiktok(200);
     assert.equal(blocked.status, 429);
-    assert.match(blocked.body.error, /3 free link imports/);
+    assert.match(blocked.body.error, /3 free AI link imports/);
   });
   it('Premium (verified with RevenueCat) is unlimited; lapsed or failing checks fall back to free', async () => {
     const token = await t.register();
@@ -272,7 +273,7 @@ describe('local food (discover)', () => {
   const chats = () => t.ai.calls.filter((c) => c.path.includes('chat')).length;
 
   it('builds one catalogue per country: local dishes, staples and cravings', async () => {
-    const res = await t.api('/v1/discover', { country: 'in' }, { token });
+    const res = await t.api('/v1/discover', { country: 'in' }, { token, headers: PREMIUM });
     assert.equal(res.status, 200);
     const { country, name, cuisine, staples, cravings, dishes } = res.body;
     assert.deepEqual([country, name, cuisine], ['IN', 'India', 'Indian']);
@@ -286,45 +287,102 @@ describe('local food (discover)', () => {
     assert.ok(dishes.some((d) => d.tags.includes('Coastal')), 'region becomes a tag');
   });
 
-  it('serves every later request from the shared cache and paints photos in the background', async () => {
+  it('serves every later request from the shared cache; background photos never use GPT', async () => {
     const calls = chats();
-    await waitFor(async () => (await t.api('/v1/discover', { country: 'IN' }, { token })).body.dishes.every((d) => d.imageURL), 10_000);
-    const res = await t.api('/v1/discover', { country: 'IN' }, { token });
-    assert.ok(res.body.dishes.every((d) => /^https:\/\/flavourly\.example\.com\/images\/[0-9a-f]{32}\.jpg#credit=AI-generated%20image$/.test(d.imageURL)));
+    const images = () => t.ai.calls.filter((c) => c.path.includes('images')).length;
+    const before = images();
+    await t.api('/v1/discover', { country: 'IN' }, { token, headers: PREMIUM });
+    await waitFor(async () => (await t.deps.cache.get('discover:paint:IN')) == null, 10_000);
+    assert.equal(images(), before, 'free sources only (none in this test), no GPT photos');
     assert.equal(chats(), calls, 'no new AI text calls');
     const other = await t.register();
-    assert.equal((await t.api('/v1/discover', { country: 'IN' }, { token: other })).status, 200);
+    assert.equal((await t.api('/v1/discover', { country: 'IN' }, { token: other, headers: PREMIUM })).status, 200);
     assert.equal(chats(), calls, 'shared across devices');
   });
 
   it('builds the same country once even when many devices ask at the same time', async () => {
     const calls = chats();
-    const results = await Promise.all([1, 2, 3, 4].map(() => t.api('/v1/discover', { country: 'MX' }, { token })));
+    const results = await Promise.all([1, 2, 3, 4].map(() => t.api('/v1/discover', { country: 'MX' }, { token, headers: PREMIUM })));
     assert.ok(results.every((r) => r.status === 200));
     assert.equal(chats(), calls + 8, 'one build: 7 dish groups + 1 kitchen call');
   });
 
   it('rejects codes that are not countries, with a readable message', async () => {
     for (const country of ['XX', 'EU', 'india', '', 'I N', 42]) {
-      const res = await t.api('/v1/discover', { country }, { token });
+      const res = await t.api('/v1/discover', { country }, { token, headers: PREMIUM });
       assert.equal(res.status, 400, String(country));
       assert.ok(res.body.error && res.body.fields?.country, String(country));
     }
   });
 
   it('says so when no dishes came back, and does not cache the failure', async () => {
-    const res = await t.api('/v1/discover', { country: 'NP' }, { token });
+    const res = await t.api('/v1/discover', { country: 'NP' }, { token, headers: PREMIUM });
     assert.equal(res.status, 502);
     assert.match(res.body.error, /Nepal/);
-    assert.equal(await t.deps.cache.get('discover:v2:NP'), null);
+    assert.equal(await t.deps.cache.get('discover:v4:NP'), null);
+  });
+
+  it('a region (from GPS or the explorer) gets its own shared catalogue, mostly its own dishes', async () => {
+    const calls = chats();
+    const res = await t.api('/v1/discover', { country: 'IN', region: 'Gujarat' }, { token, headers: PREMIUM });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.region, 'Gujarat');
+    assert.equal(res.body.name, 'Gujarat, India');
+    assert.ok(res.body.dishes.every((d) => d.remoteID.startsWith('local-in-gujarat-')));
+    const prompts = t.ai.calls.slice(-8).map((c) => c.body.messages?.[0]?.content ?? '').join(' ');
+    assert.match(prompts, /Gujarat, India/);
+    assert.match(prompts, /Mostly Gujarat's own specialities/);
+    assert.equal(chats(), calls + 8);
+    await t.api('/v1/discover', { country: 'IN', region: 'gujarat' }, { token: await t.register(), headers: PREMIUM });
+    assert.equal(chats(), calls + 8, 'shared and case-insensitive');
+  });
+
+  it('region photos use free sources only, never GPT', async () => {
+    const images = () => t.ai.calls.filter((c) => c.path.includes('images')).length;
+    const before = images();
+    await t.api('/v1/discover', { country: 'IN', region: 'Gujarat' }, { token, headers: PREMIUM });
+    await waitFor(async () => (await t.deps.cache.get('discover:paint:IN:gujarat')) == null, 10_000);
+    assert.equal(images(), before);
+  });
+
+  it('limits how many new regions one device can start a day; opened regions stay free', async () => {
+    const device = await t.register();
+    assert.equal((await t.api('/v1/discover', { country: 'IN', region: 'Kerala' }, { token: device, headers: PREMIUM })).status, 200);
+    assert.equal((await t.api('/v1/discover', { country: 'IN', region: 'Punjab' }, { token: device, headers: PREMIUM })).status, 200);
+    assert.equal((await t.api('/v1/discover', { country: 'IN', region: 'Goa' }, { token: device, headers: PREMIUM })).status, 200);
+    const blocked = await t.api('/v1/discover', { country: 'IN', region: 'Assam' }, { token: device, headers: PREMIUM });
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body.error, /new regions today/);
+    assert.equal((await t.api('/v1/discover', { country: 'IN', region: 'Gujarat' }, { token: device, headers: PREMIUM })).status, 200, 'already built: no limit');
+    assert.equal((await t.api('/v1/discover', { country: 'IN', region: 'Assam' }, { token: await t.register(), headers: PREMIUM })).status, 200);
+  });
+
+  it('rejects regions that are not place names', async () => {
+    for (const region of ['', '1234', 'x'.repeat(61), 42]) {
+      const res = await t.api('/v1/discover', { country: 'IN', region }, { token, headers: PREMIUM });
+      assert.equal(res.status, 400, JSON.stringify(region));
+      assert.ok(res.body.fields?.region);
+    }
+  });
+
+  it('famous regional cuisines per country: cleaned, shared and cached', async () => {
+    const res = await t.api('/v1/discover/regions', { country: 'it' }, { token, headers: PREMIUM });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.name, 'Italy');
+    assert.deepEqual(res.body.regions.map((r) => r.name), ['Sicily', 'Tuscany'], 'the country itself and duplicates dropped');
+    assert.equal(res.body.regions[0].signature, 'Arancini');
+    const calls = chats();
+    assert.equal((await t.api('/v1/discover/regions', { country: 'IT' }, { token: await t.register(), headers: PREMIUM })).status, 200);
+    assert.equal(chats(), calls);
+    assert.equal((await t.api('/v1/discover/regions', { country: 'XX' }, { token, headers: PREMIUM })).status, 400);
   });
 
   it('Cook Now asks for dishes from the cook\'s country', async () => {
-    const res = await t.api('/v1/ai/cook-now', { minutes: 30, craving: '', pantry: ['rice'], okToBuy: 2, servings: 2, rules: RULES, country: 'jp' }, { token });
+    const res = await t.api('/v1/ai/cook-now', { minutes: 30, craving: '', pantry: ['rice'], okToBuy: 2, servings: 2, rules: RULES, country: 'jp' }, { token, headers: PREMIUM });
     assert.equal(res.status, 200);
     const system = t.ai.calls.filter((c) => c.path.includes('chat')).at(-1).body.messages[0].content;
     assert.match(system, /lives in Japan/);
-    assert.equal((await t.api('/v1/ai/cook-now', { pantry: [], rules: RULES, country: 'ZZ' }, { token })).status, 400);
+    assert.equal((await t.api('/v1/ai/cook-now', { pantry: [], rules: RULES, country: 'ZZ' }, { token, headers: PREMIUM })).status, 400);
   });
 });
 

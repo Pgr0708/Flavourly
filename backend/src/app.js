@@ -20,7 +20,7 @@ function rateLimit({ cache, name, limit, windowSeconds, key, message }) {
   };
 }
 
-export function createApp({ config, db, cache, devices, premium, usage, importer, assistant, images, discover, nutrition }) {
+export function createApp({ config, db, cache, devices, premium, usage, importer, assistant, images, discover, nutrition, dishes, variations }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.TRUST_PROXY === 'false' ? false : config.TRUST_PROXY);
@@ -81,7 +81,17 @@ export function createApp({ config, db, cache, devices, premium, usage, importer
     await devices.erase(req.device);
     return {};
   }));
-  v1.post('/imports', validate(schemas.importLink), metered('importRecipe', (req) => importer.importLink(req.body)));
+  // Only imports that needed AI are counted (and only those need Premium).
+  v1.post('/imports', validate(schemas.importLink), json(async (req) => {
+    let usedAI = false;
+    const gate = async () => {
+      await usage.assertAllowed(req.device.id, 'importRecipe', req.premium);
+      usedAI = true;
+    };
+    const result = await importer.importLink(req.body, { gate });
+    if (usedAI) await usage.consume(req.device.id, 'importRecipe', req.premium);
+    return result;
+  }));
   v1.post('/ai/extract', validate(schemas.extract), metered('extract', (req) => importer.extractText(req.body)));
   v1.post('/ai/substitutes', validate(schemas.substitutes), metered('aiSwap', (req) => assistant.substitutes(req.body)));
   v1.post('/ai/cook-now', validate(schemas.cookNow), metered('aiIdeas', (req) => assistant.cookNow(req.body)));
@@ -91,15 +101,30 @@ export function createApp({ config, db, cache, devices, premium, usage, importer
   v1.post('/nutrition', validate(schemas.nutrition), json(async (req) => ({
     nutrition: await nutrition.forLines(req.body.lines, req.body.servings, { minCoverage: 0.5 }),
   })));
-  // Shared, cached catalogue: free for everyone, no credit used.
-  v1.post('/discover', validate(schemas.discover), json((req) => discover.local(req.body)));
+  // Shared, cached catalogues: free for everyone once built; building a new place needs Premium.
+  v1.post('/discover', validate(schemas.discover), json((req) => discover.local({ ...req.body, deviceId: req.device.id, premium: req.premium })));
+  v1.post('/discover/regions', validate(schemas.regions), json((req) => discover.regions({ ...req.body, premium: req.premium })));
+  // Search any dish: names to autocomplete, then its recipe from the shared library (found once, reused by all).
+  v1.post('/dishes/suggest', validate(schemas.dishSuggest), json((req) => dishes.suggest({ ...req.body, premium: req.premium })));
+  v1.post('/dishes/find', validate(schemas.dishFind), json((req) => dishes.find({ ...req.body, deviceId: req.device.id, premium: req.premium })));
+  // Premium "make it my way" versions, shared with cooks nearby.
+  v1.post('/variations', validate(schemas.variationCreate), json((req) => variations.create({ ...req.body, deviceId: req.device.id, premium: req.premium })));
+  v1.post('/variations/list', validate(schemas.variationList), json((req) => variations.list(req.body)));
+  v1.post('/variations/tried', validate(schemas.variationTried), json((req) => variations.tried({ id: req.body.id, deviceId: req.device.id })));
+  v1.post('/videos', validate(schemas.videos), json((req) => dishes.videos(req.body)));
   // Premium: full-length listening for a video the user picked (audio only, max TRANSCRIBE_MAX_MB).
   // Not metered per use; a per-device daily cap keeps the OpenAI bill bounded.
   v1.post('/ai/transcribe',
     (req, _res, next) => next(req.premium ? undefined : new HttpError(403, 'Listening to full videos is part of Premium.', { code: 'premium' })),
-    rateLimit({ cache, name: 'transcribe', limit: config.TRANSCRIBE_PER_DAY, windowSeconds: 86_400, key: (req) => req.device.id, message: "You've listened to a lot of videos today. Try again tomorrow." }),
     express.raw({ type: ['audio/*', 'video/mp4'], limit: `${config.TRANSCRIBE_MAX_MB}mb` }),
-    json((req) => importer.transcribe({ audio: req.body, mimeType: req.get('Content-Type') ?? '' })));
+    json(async (req) => {
+      await usage.assertAllowed(req.device.id, 'transcribeMinutes', req.premium);
+      const result = await importer.transcribe({ audio: req.body, mimeType: req.get('Content-Type') ?? '' });
+      // ponytail: minutes estimated from size (the app's AppleM4A export ≈ 128 kbps ≈ 0.96 MB/min); send real duration if this drifts.
+      const minutes = Math.max(1, Math.ceil((req.body?.length ?? 0) / 960_000));
+      await usage.consume(req.device.id, 'transcribeMinutes', req.premium, minutes);
+      return result;
+    }));
   // Free-only lookups (filling in photos for saved recipes) cost nothing, so they aren't counted.
   v1.post('/images/recipe', validate(schemas.image), (req, res, next) => (req.body.freeOnly
     ? json((r) => images.recipePhoto(r.body))(req, res).catch(next)

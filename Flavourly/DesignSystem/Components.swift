@@ -447,6 +447,7 @@ struct RecipeImage: View {
     let recipe: Recipe?
     var cornerRadius: CGFloat = 16
     var isHero = false
+    @ObservedObject private var fills = PhotoFill.shared
 
     var body: some View {
         GeometryReader { geometry in
@@ -455,6 +456,7 @@ struct RecipeImage: View {
                 .clipped()
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .task(id: recipe?.key) { if let recipe { PhotoFill.shared.request(recipe) } }
         .overlay(alignment: .bottomTrailing) {
             // Only for web photos actually shown, above the rounded content card that overlaps the hero.
             if isHero, recipe?.imageData == nil, recipe?.imageName == nil, let credit = ImageCredit(recipe?.imageURL) {
@@ -480,20 +482,9 @@ struct RecipeImage: View {
         }
     }
 
-    @ViewBuilder
+    /// Every photo fills its frame edge to edge (no small centred copy on a blurred background).
     private func fitted(_ image: Image, pixelWidth: CGFloat, size: CGSize) -> some View {
-        if isHero, pixelWidth < 500 {
-            ZStack {
-                image.resizable().scaledToFill().blur(radius: 24).overlay(Color.black.opacity(0.12))
-                image.resizable().scaledToFill()
-                    .frame(width: min(size.width * 0.62, 240), height: min(size.width * 0.62, 240))
-                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .shadow(color: .black.opacity(0.25), radius: 18, y: 10)
-                    .offset(y: 14)
-            }
-        } else {
-            image.resizable().scaledToFill()
-        }
+        image.resizable().scaledToFill()
     }
 }
 
@@ -504,10 +495,15 @@ struct RecipeArt: View {
 
     var body: some View {
         let palette = colors
-        ZStack {
-            LinearGradient(colors: palette, startPoint: .topLeading, endPoint: .bottomTrailing)
-            Circle().fill(.white.opacity(0.18)).scaleEffect(0.9).offset(x: 40, y: -30)
-            Text(emoji).font(.system(size: 54)).shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+        GeometryReader { geometry in
+            let side = min(geometry.size.width, geometry.size.height)
+            ZStack {
+                LinearGradient(colors: palette, startPoint: .topLeading, endPoint: .bottomTrailing)
+                Circle().fill(.white.opacity(0.18)).scaleEffect(0.9).offset(x: side * 0.25, y: -side * 0.2)
+                // Sized to the card, not a fixed 54 pt that left a big card mostly empty.
+                Text(emoji).font(.system(size: max(40, side * 0.42))).shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
     }
 

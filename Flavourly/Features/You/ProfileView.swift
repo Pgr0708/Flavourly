@@ -22,6 +22,8 @@ struct ProfileView: View {
                     row(.nutrition, "Nutrition & goals", targetsText, "chart.pie.fill", Theme.capture)
                     divider
                     row(.healthConnect, "Apple Health", HealthService.shared.isConnected ? "Connected" : "Not connected", "heart.fill", Theme.allergen)
+                    divider
+                    row(.learned, "What Flavourly learned", "Your rhythm, moods and searches · private", "brain.head.profile", Theme.aiDeep)
                 }
                 .card(padding: 4)
                 VStack(spacing: 0) {
@@ -46,20 +48,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showPaywall) { PaywallScreenView().environmentObject(settings) }
     }
 
-    private var header: some View {
-        HStack(spacing: 14) {
-            Avatar(initial: String(settings.displayName.prefix(1)).uppercased(), color: Theme.green, size: 64)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(settings.displayName).font(Theme.display(30))
-                if settings.isPremium {
-                    Badge(text: "Premium", systemImage: "crown.fill", tone: .gold)
-                } else {
-                    Text("Free plan").font(Theme.micro).foregroundStyle(Theme.muted)
-                }
-            }
-            Spacer()
-        }
-    }
+    private var header: some View { ProfileHeaderEditor() }
 
     private var stats: some View {
         let cooked = recipes.reduce(0) { $0 + Int($1.cookedCount) }

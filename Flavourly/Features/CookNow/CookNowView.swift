@@ -7,6 +7,14 @@ internal import Combine
 final class CookNowModel: ObservableObject {
     static let shared = CookNowModel()
     @Published var minutes: Int?
+    /// A dish to cook from what's at home (e.g. a search with no saved recipe); opens the sheet.
+    @Published var craving: String?
+    @Published var openRequested = false
+
+    func open(craving: String) {
+        self.craving = craving
+        openRequested = true
+    }
 }
 
 /// What the user told Cook Now; drives both local ranking and AI ideas.
@@ -393,6 +401,15 @@ struct CookNowView: View {
             CookNowModel.shared.minutes = nil
             step = 1
         }
+        if let craving = CookNowModel.shared.craving {
+            answers.craving = String(craving.prefix(Validate.Limit.craving))
+            CookNowModel.shared.craving = nil
+            step = 1
+        }
+        if answers.minutes == 30, let usual = Personalizer.shared.habits.usualMinutes(at: .now) {
+            // Start from how long this cook usually spends at this time of day.
+            answers.minutes = [15, 30, 45].first { usual <= $0 } ?? nil
+        }
         answers.have = pantry.map(\.displayName).filter { !$0.isEmpty }
         answers.eaters = People.defaultEaters(for: answers.slot)
     }
@@ -494,12 +511,13 @@ struct CookNowResults: View {
             if Usage.canUse(.aiIdeas) {
                 PrimaryButton(title: ideas.isEmpty ? "Get 3 AI ideas" : "More ideas", systemImage: "sparkles", tone: .ai,
                               isLoading: loading, height: 48) { askAI() }
-                if !settings.isPremium {
-                    Text("\(Usage.remaining(.aiIdeas)) free AI idea requests left this week").font(Theme.micro).foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity)
-                }
+                Text("\(Usage.remaining(.aiIdeas)) AI idea requests left this week").font(Theme.micro).foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+            } else if settings.isPremium {
+                Text("You've used this week's AI ideas. They come back on \(Usage.resetDate.formatted(.dateTime.weekday(.wide))).")
+                    .font(Theme.micro).foregroundStyle(Theme.muted).frame(maxWidth: .infinity)
             } else {
-                PrimaryButton(title: "Unlock unlimited AI ideas", systemImage: "crown.fill", tone: .premium, height: 46) { showPaywall = true }
+                PrimaryButton(title: "Unlock AI ideas with Premium", systemImage: "crown.fill", tone: .premium, height: 46) { showPaywall = true }
             }
         }
         .padding(16)
@@ -528,6 +546,9 @@ struct CookNowResults: View {
             } catch APIError.limit(let message) {
                 Usage.exhaust(.aiIdeas)
                 DropsManager.showWarning(title: "Weekly limit reached", subtitle: message)
+            } catch APIError.premiumRequired {
+                Usage.exhaust(.aiIdeas)
+                showPaywall = true
             } catch {
                 DropsManager.showError(title: "Couldn't get AI ideas", subtitle: error.localizedDescription)
             }

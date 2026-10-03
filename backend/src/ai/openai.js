@@ -35,9 +35,9 @@ export function createOpenAI({ apiKey, model, baseUrl, timeoutMs }) {
   }
 
   /** Returns the parsed JSON object the model produced for `schema` (a strict JSON Schema). */
-  async function json({ name, schema, system, user, temperature = 0.3, maxTokens = 2_500 }) {
+  async function json({ name, schema, system, user, temperature = 0.3, maxTokens = 2_500, model: override }) {
     const reply = await call('/chat/completions', {
-      model,
+      model: override ?? model,
       temperature,
       max_tokens: maxTokens,
       response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },

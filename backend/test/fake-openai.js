@@ -112,6 +112,12 @@ function answer(name, request) {
       if (/xyzzy/i.test(dish)) return { found: false, recipe: { ...recipeFromText(''), title: '', ingredients: [], steps: [] } };
       return { found: true, recipe: { ...recipeFromText(`${dish}\nIngredients\n4 potatoes\n300 g wheat flour\n1 tsp cumin\nMethod\n1. Boil the potatoes for 15 min\n2. Fry the puris`), title: dish } };
     }
+    case 'recipe_expand': {
+      const brief = JSON.parse(user);
+      const extra = Array.from({ length: 10 }, (_, i) => ({ text: `${i + 1} tsp spice ${i + 1}`, quantity: i + 1, quantityMax: null, unit: 'tsp', name: `spice ${i + 1}`, note: null, isOptional: false, confidence: 1 }));
+      const steps = Array.from({ length: 9 }, (_, i) => ({ text: `Detailed step ${i + 1}: cook on medium heat for 2 min.`, timerSeconds: 120, confidence: 1 }));
+      return { recipe: { ...brief, ingredients: [...brief.ingredients, ...extra], steps: [...brief.steps, ...steps] } };
+    }
     case 'recipe_variation': {
       const { dish, change } = JSON.parse(user);
       if (/not food/i.test(change)) return { ok: false, recipe: { ...recipeFromText(''), title: '', ingredients: [], steps: [] } };

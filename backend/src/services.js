@@ -555,7 +555,7 @@ export function createDiscover({ ai, cache, config, images, fetcher, nutrition =
   async function build(code, country, region) {
     const [kitchen, ...groups] = await Promise.allSettled([
       ai.json(localTasks.kitchen({ country, region })),
-      ...LOCAL_GROUPS.map((group) => ai.json(localTasks.dishes({ country, region, ...group }))),
+      ...LOCAL_GROUPS.map((group) => ai.json({ ...localTasks.dishes({ country, region, ...group }), model: config.DISH_MODEL })),
     ]);
     const place = region ? `${region}, ${country}` : country;
     const idPrefix = `local-${code.toLowerCase()}-${region ? `${slug(region)}-` : ''}`;

@@ -36,16 +36,18 @@ enum DishSearch {
     /// The dish as a recipe the app can open, save and cook.
     static func find(_ name: String) async throws -> Recipe {
         struct Body: Encodable { let name: String; let country: String; let region: String? }
-        struct Reply: Decodable { let recipe: RecipeDraft }
+        struct Reply: Decodable { let recipe: RecipeDraft; var live: Bool? }
         let local = LocalFood.shared
         let key = ResponseCache.key(Apis.dishFind, ["name": name.lowercased()])
         let draft: RecipeDraft
         if let hit = ResponseCache.shared.value(RecipeDraft.self, for: key) {
             draft = hit
         } else {
-            draft = try await APIClient.shared.post(Apis.dishFind, Body(name: String(name.prefix(80)), country: local.country, region: local.region),
-                                                    as: Reply.self).recipe
-            ResponseCache.shared.store(draft, for: key, ttl: 30 * 86_400)
+            let reply = try await APIClient.shared.post(Apis.dishFind, Body(name: String(name.prefix(80)), country: local.country, region: local.region),
+                                                        as: Reply.self)
+            draft = reply.recipe
+            // Live recipes (Spoonacular) may only be kept for an hour under their terms.
+            ResponseCache.shared.store(draft, for: key, ttl: reply.live == true ? 3_600 : 30 * 86_400)
         }
         Personalizer.shared.remember(name)
         guard let recipe = Library.shared.add([draft]).first else { throw APIError.invalidResponse }

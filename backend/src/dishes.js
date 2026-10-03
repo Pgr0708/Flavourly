@@ -1,9 +1,10 @@
 // Dish search for any dish in the world: autocomplete from each country's popular dish names, and recipes
 // from a shared library — found once (TheMealDB, else AI) and then reused by every user, so the same dish is
 // never paid for twice.
-import { dishTasks } from './ai/tasks.js';
+import { dishTasks, expandTask } from './ai/tasks.js';
 import { parseLine } from './nutrition.js';
 import { toDraft } from './recipe.js';
+import { createSources, isThin } from './sources.js';
 import { describesDish } from './services.js';
 import { HttpError, log } from './util.js';
 import { cleanText, countryName } from './validation.js';
@@ -56,6 +57,7 @@ function mealToRecipe(meal) {
 
 export function createDishes({ db, ai, cache, config, fetcher, nutrition = { enrich: async (draft) => draft }, images, usage }) {
   const building = new Map();
+  const sources = createSources({ config, cache, fetcher });
 
   /** ~200 popular dish names for a country, built once by AI and shared for 90 days. */
   async function countryNames(code, premium) {
@@ -75,6 +77,11 @@ export function createDishes({ db, ai, cache, config, fetcher, nutrition = { enr
     return (await building.get(key)).value;
   }
 
+  /**
+   * Where a new dish comes from, cheapest and most trusted first: TheMealDB → Wikibooks Cookbook (both saved
+   * and shared) → Spoonacular (live only, never saved — their terms) → AI with the stronger dish model, plus a
+   * second "write it out in full" pass when the first answer is too short.
+   */
   async function build(slug, name, code, region, { deviceId, premium }) {
     let draft = null;
     let source = 'themealdb';
@@ -86,15 +93,28 @@ export function createDishes({ db, ai, cache, config, fetcher, nutrition = { enr
       log.warn('themealdb search failed', { name, error: error.message });
     }
     if (!draft || draft.ingredients.length < 2) {
+      draft = await sources.wikibooks(name);
+      source = 'wikibooks';
+    }
+    if (!draft) {
+      const live = await sources.spoonacular(name, slug);
+      if (live) return { ...(await nutrition.enrich(live)), remoteID: `dish-${slug}`, live: true };
+    }
+    if (!draft) {
       if (await cache.get(`dishmiss:${slug}`)) throw new HttpError(404, `We couldn't find a recipe called "${name}".`, { code: 'unknown_dish' });
       // A new AI recipe is Premium (weekly cap); once written it's shared with everyone for free.
       if (deviceId != null) await usage.assertAllowed(deviceId, 'dishAI', premium);
-      const result = await ai.json(dishTasks.recipe({ name, country: code ? countryName(code) : null, region }));
+      const result = await ai.json({ ...dishTasks.recipe({ name, country: code ? countryName(code) : null, region }), model: config.DISH_MODEL });
       if (!result.found || !(result.recipe?.ingredients?.length >= 2)) {
         await cache.set(`dishmiss:${slug}`, 1, 7 * DAY);
         throw new HttpError(404, `We couldn't find a recipe called "${name}". Check the spelling or try another name.`, { code: 'unknown_dish' });
       }
       draft = toDraft(result.recipe, { method: 'search' });
+      if (isThin(draft)) {
+        const fuller = await ai.json({ ...expandTask({ name, recipe: result.recipe }), model: config.DISH_MODEL })
+          .then((r) => toDraft(r.recipe, { method: 'search' }), (error) => { log.warn('recipe expand failed', { name, error: error.message }); return null; });
+        if (fuller && fuller.ingredients.length >= draft.ingredients.length && fuller.steps.length >= draft.steps.length) draft = fuller;
+      }
       source = 'ai';
       if (deviceId != null) await usage.consume(deviceId, 'dishAI', premium);
     }
@@ -181,7 +201,9 @@ export function createDishes({ db, ai, cache, config, fetcher, nutrition = { enr
       if (!building.has(slug)) {
         building.set(slug, build(slug, clean, code, region, { deviceId, premium }).finally(() => building.delete(slug)));
       }
-      return { recipe: await withPhoto(await building.get(slug)), cached: false };
+      const { live, ...recipe } = await building.get(slug);
+      // live: from Spoonacular, not saved here (their terms) — the app should not keep it long either.
+      return { recipe: await withPhoto(recipe), cached: false, ...(live ? { live: true } : {}) };
     },
   };
 }

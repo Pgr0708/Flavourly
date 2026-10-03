@@ -393,5 +393,22 @@ export const variationTasks = {
   }),
 };
 
+/** Second pass when a written recipe came back too short: same dish, written out in full. */
+export const expandTask = ({ name, recipe: brief }) => ({
+  name: 'recipe_expand',
+  schema: { type: 'object', additionalProperties: false, required: ['recipe'], properties: { recipe } },
+  system: [
+    `This recipe for "${name}" is too brief for a home cook to follow. Rewrite it in full detail as a good cookbook would.`,
+    'Keep the same dish, cuisine and servings. Keep every correct ingredient and step, and add what is missing.',
+    DETAILED,
+    'If the dish is genuinely simple (a drink, a salad, toast), it may stay short, but every ingredient and step must still be there.',
+    'timerSeconds when a step has a duration. nutrition: an honest estimate per serving. Write in English.',
+    DATA_ONLY,
+  ].join('\n'),
+  user: JSON.stringify(brief),
+  temperature: 0.3,
+  maxTokens: 8_000,
+});
+
 export const imagePrompt = ({ title, description }) =>
   `Appetising overhead food photograph of ${title}${description ? ` (${description})` : ''}. Natural daylight, ceramic plate on a wooden table, shallow depth of field. No text, no people, no logos.`;

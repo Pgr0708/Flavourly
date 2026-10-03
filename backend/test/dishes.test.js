@@ -5,6 +5,27 @@ import { setup, stubFetcher } from './helpers.js';
 
 // Search any dish: autocomplete from each country's dish names, recipes from a shared library
 // (TheMealDB, else AI once), and recipe videos.
+const WIKI_KHICHDI = `{{Recipe summary | category = Rice recipes | servings = 4 | time = 1 hour | difficulty = 2}}
+'''Khichdi''' is a [[Cookbook:Cuisine of India|Indian]] comfort dish.<ref>A note</ref>
+== Ingredients ==
+* 1 [[Cookbook:Cup|cup]] [[Cookbook:Rice|rice]]
+* ½ cup moong dal
+* 1 tsp [[Cookbook:Turmeric|turmeric]]
+* 2 tbsp ghee
+* 1 tsp cumin seeds
+* 4 cups water
+== Procedure ==
+# Wash the rice and dal and soak for 20 minutes.
+# Heat the ghee and add the cumin.
+# Add rice, dal, turmeric and water; pressure cook for 15 minutes.
+== Notes, tips, and variations ==
+* Serve with yogurt.`;
+const SPOON_PAD_SEE_EW = {
+  id: 716429, title: 'Pad See Ew', servings: 2, readyInMinutes: 25, cuisines: ['Thai'], image: 'https://img.spoonacular.com/recipes/716429-556x370.jpg',
+  sourceName: 'Example Kitchen', sourceUrl: 'https://example.com/pad-see-ew',
+  extendedIngredients: [{ original: '200 g wide rice noodles', amount: 200, unit: 'g', name: 'rice noodles' }, { original: '2 tbsp soy sauce', amount: 2, unit: 'tbsp', name: 'soy sauce' }, { original: '1 cup gai lan', amount: 1, unit: 'cup', name: 'gai lan' }],
+  analyzedInstructions: [{ steps: [{ step: 'Soak the noodles.', length: { number: 10, unit: 'minutes' } }, { step: 'Stir-fry everything over high heat.' }] }],
+};
 let t;
 let token;
 const chats = () => t.ai.calls.filter((c) => c.path.includes('chat')).length;
@@ -16,6 +37,12 @@ before(async () => {
         strInstructions: 'Preheat oven to 180C.\r\nMix the sauce for 5 min.\r\nBake for 30 minutes.',
         strIngredient1: 'soy sauce', strMeasure1: '3/4 cup', strIngredient2: 'chicken breasts', strMeasure2: '2', strIngredient3: 'brown sugar', strMeasure3: '1/2 cup', strIngredient4: '', strMeasure4: '' }] }
       : { meals: null }),
+    'https://en.wikibooks.org/w/api.php': (url) => {
+      if (url.includes('list=search')) return { query: { search: url.includes('Khichdi') ? [{ title: 'Cookbook:Sunday Roast' }, { title: 'Cookbook:Moong Dal Khichdi' }] : [] } };
+      return { parse: { wikitext: WIKI_KHICHDI } };
+    },
+    'https://api.spoonacular.com/recipes/complexSearch': (url) => ({ results: url.includes('Pad%20See%20Ew') ? [SPOON_PAD_SEE_EW] : [] }),
+    'https://api.spoonacular.com/recipes/716429/information': SPOON_PAD_SEE_EW,
     'https://www.googleapis.com/youtube/v3/search': { items: [
       { id: { videoId: 'abc123' }, snippet: { title: 'Aloo Puri Recipe | Gujarati Breakfast &amp; More', channelTitle: 'Cook &#39;n&#39; Eat', thumbnails: { high: { url: 'https://i.ytimg.com/abc.jpg' } } } },
       { id: { videoId: 'zzz999' }, snippet: { title: 'My weekend vlog', channelTitle: 'Random', thumbnails: {} } },
@@ -23,7 +50,7 @@ before(async () => {
     'https://en.wikipedia.org/': { query: { pages: {} } },
     'https://api.openverse.org/': { results: [] },
   });
-  t = await setup({ fetcher, user: 'premium-dishes', env: { PREMIUM_DISH_AI_PER_WEEK: '3', YOUTUBE_API_KEY: 'yt-key' } });
+  t = await setup({ fetcher, user: 'premium-dishes', env: { PREMIUM_DISH_AI_PER_WEEK: '3', YOUTUBE_API_KEY: 'yt-key', SPOONACULAR_API_KEY: 'spoon-key' } });
   token = await t.register();
 });
 after(() => t.teardown());
@@ -61,18 +88,21 @@ describe('POST /v1/dishes/suggest', () => {
 });
 
 describe('POST /v1/dishes/find', () => {
-  it('a dish nobody has searched: AI writes it once, then everyone gets the saved copy', async () => {
+  it('a dish nobody has: the dish model writes it, a too-short answer is written out in full, then everyone gets the saved copy', async () => {
     const calls = chats();
     const first = await t.api('/v1/dishes/find', { name: 'Aloo Puri', country: 'IN', region: 'Gujarat' }, { token });
     assert.equal(first.status, 200);
     assert.equal(first.body.cached, false);
     assert.equal(first.body.recipe.remoteID, 'dish-alu-puri');
-    assert.ok(first.body.recipe.ingredients.length >= 3 && first.body.recipe.steps.length >= 2);
-    assert.equal(chats(), calls + 1);
+    assert.ok(first.body.recipe.ingredients.length >= 10 && first.body.recipe.steps.length >= 8, 'detailed after the second pass');
+    assert.equal(chats(), calls + 2, 'recipe, then "write it out in full"');
+    const used = t.ai.calls.filter((c) => c.path.includes('chat')).slice(-2);
+    assert.deepEqual(used.map((c) => c.body.model), ['gpt-4.1-mini', 'gpt-4.1-mini']);
+    assert.deepEqual(used.map((c) => c.body.response_format.json_schema.name), ['dish_recipe', 'recipe_expand']);
     const again = await t.api('/v1/dishes/find', { name: 'alu poori' }, { token: await t.register() });
     assert.equal(again.body.cached, true, 'other spelling, other device: from the library');
     assert.equal(again.body.recipe.title, first.body.recipe.title);
-    assert.equal(chats(), calls + 1, 'no second AI call');
+    assert.equal(chats(), calls + 2, 'no more AI calls');
   });
   it('TheMealDB first: real recipe, amounts parsed, no AI', async () => {
     const calls = chats();
@@ -85,6 +115,37 @@ describe('POST /v1/dishes/find', () => {
     assert.equal(recipe.ingredients[0].quantity, 0.75);
     assert.equal(recipe.steps.length, 3);
     assert.equal(chats(), calls);
+  });
+  it('Wikibooks Cookbook next: the matching page, wiki markup cleaned, credited and saved — no AI', async () => {
+    const calls = chats();
+    const res = await t.api('/v1/dishes/find', { name: 'Moong Dal Khichdi' }, { token, headers: { 'X-RC-App-User': 'free-cook' } });
+    assert.equal(res.status, 200, 'free cooks get it: no AI involved');
+    const { recipe } = res.body;
+    assert.equal(recipe.title, 'Moong Dal Khichdi');
+    assert.equal(recipe.servings, 4);
+    assert.equal(recipe.ingredients.length, 6);
+    assert.equal(recipe.ingredients[0].text, '1 cup rice');
+    assert.equal(recipe.steps.length, 3);
+    assert.match(recipe.sourceName, /Wikibooks.*CC BY-SA/);
+    assert.match(recipe.sourceURL, /en\.wikibooks\.org\/wiki\/Cookbook%3AMoong_Dal_Khichdi/);
+    assert.equal(chats(), calls);
+    const [[row]] = await t.deps.db.query("SELECT source FROM dishes WHERE slug = 'mung-dal-khichdi'");
+    assert.equal(row?.source, 'wikibooks');
+  });
+  it('Spoonacular after that: served live and never saved (their terms); the next lookup goes straight to the recipe', async () => {
+    const calls = chats();
+    const res = await t.api('/v1/dishes/find', { name: 'Pad See Ew' }, { token, headers: { 'X-RC-App-User': 'free-cook' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.live, true);
+    assert.equal(res.body.recipe.title, 'Pad See Ew');
+    assert.equal(res.body.recipe.sourceName, 'Example Kitchen');
+    assert.equal(res.body.recipe.steps[0].timerSeconds, 600);
+    assert.equal(chats(), calls);
+    const [[row]] = await t.deps.db.query("SELECT COUNT(*) AS n FROM dishes WHERE slug = 'pad-si-ev'");
+    assert.equal(Number(row.n), 0, 'not stored');
+    const again = await t.api('/v1/dishes/find', { name: 'pad see ew' }, { token });
+    assert.equal(again.body.live, true);
+    assert.ok(t.deps.fetcher.requests.some((u) => u.includes('/recipes/716429/information')), 'by id the second time');
   });
   it('found dishes show up in suggestions for everyone', async () => {
     const res = await t.api('/v1/dishes/suggest', { q: 'teri' }, { token });

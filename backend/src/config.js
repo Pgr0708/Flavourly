@@ -30,6 +30,8 @@ const schema = z.object({
 
   OPENAI_API_KEY: z.string().default(''),
   OPENAI_MODEL: z.string().min(1).default('gpt-4o-mini'),
+  // Writes new dish recipes (once per dish, then shared): a stronger model gives cookbook-length recipes.
+  DISH_MODEL: z.string().min(1).default('gpt-4.1-mini'),
   OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   OPENAI_TIMEOUT_MS: int(45_000, 1_000, 180_000),
 
@@ -47,6 +49,8 @@ const schema = z.object({
   // Pexels: https://www.pexels.com/api/ — free forever, 200 req/hour, no card needed.
   // Photos may use at most this many Spoonacular searches a day (the rest of the 150 points stay for nutrition).
   SPOONACULAR_PHOTOS_PER_DAY: int(40, 0, 10_000),
+  // Live recipe lookups (their terms forbid storing recipes, so these are never saved). ~1.2 points each.
+  SPOONACULAR_RECIPES_PER_DAY: int(60, 0, 10_000),
   PEXELS_API_KEY: z.string().default(''),
   // https://pixabay.com/api/docs/ — free, 100 req/min. Images are downloaded and served by us (no hotlinking).
   PIXABAY_API_KEY: z.string().default(''),

@@ -84,6 +84,7 @@ export const tasks = {
     system: [
       'You turn shared recipe text into a structured recipe for a cooking app.',
       'The text may be a social caption, a video description, a web page, OCR of a cookbook page, or a speech transcript.',
+      'Lines in [square brackets] are section labels added by the app (for example what the cook says vs. text shown on screen in a video) — use both sections, never as the title.',
       'Use only what the text says: never invent ingredients, amounts or steps. If the method is missing, return an empty steps list.',
       'ingredients[].text is the line as a cook would write it ("200 g spaghetti"). Also fill quantity (decimals for fractions), quantityMax for ranges, unit (g, kg, ml, l, tsp, tbsp, cup, oz, lb, pinch, clove, can, piece, slice, bunch or null), name (the food) and note (prep such as "finely chopped").',
       'confidence is 0–1: 1 when clearly stated, 0.6 or less when vague ("some", "to taste") or when the text looks garbled.',

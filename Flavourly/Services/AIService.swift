@@ -44,7 +44,7 @@ enum AIService {
     static func extract(text: String, kind: String, sourceURL: String? = nil) async throws -> RecipeDraft {
         struct Body: Encodable { let text: String; let kind: String; let sourceURL: String?; let rules: RulesPayload }
         struct Reply: Codable { let recipe: RecipeDraft }
-        let body = Body(text: String(text.prefix(12_000)), kind: kind, sourceURL: sourceURL, rules: .current())
+        let body = Body(text: String(text.prefix(Validate.Limit.pasted)), kind: kind, sourceURL: sourceURL, rules: .current())
         let key = ResponseCache.key(Apis.extract, body)
         if let hit = ResponseCache.shared.value(Reply.self, for: key) { return hit.recipe }
         let reply = try await APIClient.shared.post(Apis.extract, body, as: Reply.self)
@@ -68,8 +68,10 @@ enum AIService {
     static func substitutes(for ingredient: String, in recipe: Recipe, eaters: [String]? = nil) async throws -> [SubstituteOption] {
         struct Body: Encodable { let ingredient: String; let recipeTitle: String; let otherIngredients: [String]; let rules: RulesPayload }
         struct Reply: Codable { let options: [SubstituteOption] }
-        let others = recipe.checkLines.filter { $0 != ingredient }
-        let body = Body(ingredient: ingredient, recipeTitle: recipe.displayTitle, otherIngredients: others, rules: .current(for: eaters))
+        // Clipped to the server's limits: one long line must not fail the whole request.
+        let others = recipe.checkLines.filter { $0 != ingredient }.prefix(Validate.Limit.ingredients).map { String($0.prefix(Validate.Limit.ingredient)) }
+        let body = Body(ingredient: String(ingredient.prefix(Validate.Limit.ingredient)), recipeTitle: String(recipe.displayTitle.prefix(Validate.Limit.title)),
+                        otherIngredients: Array(others), rules: .current(for: eaters))
         let key = ResponseCache.key(Apis.substitutes, body)
         if let hit = ResponseCache.shared.value(Reply.self, for: key) { return hit.options }
         let reply = try await APIClient.shared.post(Apis.substitutes, body, as: Reply.self)
@@ -159,10 +161,21 @@ enum AIService {
 
     // MARK: Images
 
+    /// A free, credited photo for a saved recipe, or nil when none matches (the server never uses GPT here).
+    static func freePhotoURL(title: String) async throws -> String? {
+        struct Body: Encodable { let title: String; let freeOnly = true }
+        struct Reply: Codable { let url: String }
+        do {
+            return try await APIClient.shared.post(Apis.recipeImage, Body(title: String(title.prefix(Validate.Limit.title))), as: Reply.self).url
+        } catch APIError.server {
+            return nil // 404 "no free photo yet", or a title the server rejects
+        }
+    }
+
     static func recipeImageURL(title: String, summary: String?) async throws -> String {
         struct Body: Encodable { let title: String; let description: String? }
         struct Reply: Codable { let url: String }
-        let body = Body(title: title, description: summary)
+        let body = Body(title: String(title.prefix(Validate.Limit.title)), description: summary.map { String($0.prefix(Validate.Limit.summary)) })
         let key = ResponseCache.key(Apis.recipeImage, body)
         if let hit = ResponseCache.shared.value(Reply.self, for: key) { return hit.url }
         let reply = try await APIClient.shared.post(Apis.recipeImage, body, as: Reply.self)

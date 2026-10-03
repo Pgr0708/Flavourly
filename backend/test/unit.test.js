@@ -54,11 +54,12 @@ describe('request schemas', () => {
     assert.deepEqual(parsed.data.rules.diets, []);
     assert.equal(ok(schemas.substitutes, { ingredient: '200 ml cream', recipeTitle: 'Pasta', rules: { allergies: Array(31).fill('x') } }).success, false);
   });
-  it('extract: needs 20+ characters with letters, max 12,000', () => {
+  it('extract: needs 20+ characters with letters, max 20,000 (the app paste limit)', () => {
     assert.equal(ok(schemas.extract, { text: 'too short' }).success, false);
     assert.equal(ok(schemas.extract, { text: '1234567890 1234567890 123' }).success, false);
     assert.equal(ok(schemas.extract, { text: 'Tomato soup with basil and cream', kind: 'ocr' }).success, true);
-    assert.equal(ok(schemas.extract, { text: 'a'.repeat(12_001) }).success, false);
+    assert.equal(ok(schemas.extract, { text: 'a'.repeat(20_001) }).success, false);
+    assert.equal(ok(schemas.extract, { text: 'Tomato soup '.repeat(1_600) }).success, true);
     assert.equal(ok(schemas.extract, { text: 'Tomato soup with basil and cream', kind: 'video' }).success, false);
   });
   it('cook now: number ranges and optional minutes', () => {

@@ -42,7 +42,19 @@ const schema = z.object({
   // Verified nutrition. USDA key is free (api.data.gov); DEMO_KEY works but allows ~30 requests/hour.
   USDA_API_KEY: z.string().min(1).default('DEMO_KEY'),
   // Optional: Spoonacular fills in ingredients USDA can't match (free plan = 150 points/day).
+  // Also used for food image search (same key, no extra cost).
   SPOONACULAR_API_KEY: z.string().default(''),
+  // Free food image sources — waterfall tried before GPT image generation.
+  // Pexels: https://www.pexels.com/api/ — free forever, 200 req/hour, no card needed.
+  // Photos may use at most this many Spoonacular searches a day (the rest of the 150 points stay for nutrition).
+  SPOONACULAR_PHOTOS_PER_DAY: int(40, 0, 10_000),
+  PEXELS_API_KEY: z.string().default(''),
+  // https://pixabay.com/api/docs/ — free, 100 req/min. Images are downloaded and served by us (no hotlinking).
+  PIXABAY_API_KEY: z.string().default(''),
+  // TheMealDB: "1" is the free development key; production apps need a supporter key (themealdb.com/api.php).
+  THEMEALDB_API_KEY: z.string().min(1).default('1'),
+  // Unsplash: https://unsplash.com/developers — free, 50 req/hour (apply for 5,000/hour).
+  UNSPLASH_ACCESS_KEY: z.string().default(''),
   FETCH_USER_AGENT: z.string().min(1).default('Mozilla/5.0 (compatible; FlavourlyBot/1.0; +https://flavourly.dakshyaminfotech.store)'),
 
   REVENUECAT_SECRET_KEY: z.string().default(''),

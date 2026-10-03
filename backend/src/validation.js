@@ -81,7 +81,7 @@ export const schemas = {
     rules: rulesSchema,
   }),
   extract: z.object({
-    text: text(12_000, { min: 20, multiline: true, letters: true }),
+    text: text(20_000, { min: 20, multiline: true, letters: true }), // = the app's paste limit
     kind: z.enum(['text', 'ocr', 'transcript', 'caption']).default('text'),
     sourceURL: webUrl.optional().nullable(),
     rules: rulesSchema,
@@ -124,6 +124,8 @@ export const schemas = {
   image: z.object({
     title: text(120, { min: 2, letters: true }),
     description: text(300).optional().nullable(),
+    // true: only look for a free photo (never GPT, not counted against the free plan).
+    freeOnly: z.boolean().default(false),
   }),
   discover: z.object({ country: countryCode }),
   nutrition: z.object({

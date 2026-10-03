@@ -20,6 +20,7 @@ enum Apis {
     static let registerDevice = "v1/devices"
     static let importLink = "v1/imports"
     static let extract = "v1/ai/extract"
+    static let transcribe = "v1/ai/transcribe"
     static let plan = "v1/ai/plan"
     static let substitutes = "v1/ai/substitutes"
     static let cookNow = "v1/ai/cook-now"

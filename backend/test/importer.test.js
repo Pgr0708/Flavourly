@@ -17,7 +17,10 @@ before(async () => {
     'https://mariaskitchen.example/curry': await fixture('creator-site.html'),
     'https://www.instagram.com/reel/talky/': '<html><head><meta property="og:description" content="NO_RECIPE so good, recipe in the video! #dinner #easy"></head></html>',
     'https://www.instagram.com/p/private/': '<html><head></head><body>Log in</body></html>',
-    'https://www.tiktok.com/oembed': { json: { title: 'Garlic noodles\nIngredients\n200 g noodles\n4 cloves garlic\nMethod\n1. Boil the noodles for 5 min', author_name: 'noodlequeen', thumbnail_url: 'https://p16.example/t.jpg' } },
+    'https://www.tiktok.com/oembed': (url) => {
+      if (url.includes('%40blocked')) throw new Error('That site took too long to answer.'); // like a DNS-blocked network
+      return { title: 'Garlic noodles\nIngredients\n200 g noodles\n4 cloves garlic\nMethod\n1. Boil the noodles for 5 min', author_name: 'noodlequeen', thumbnail_url: 'https://p16.example/t.jpg' };
+    },
     'https://www.youtube.com/oembed': { json: { title: 'Easy Shakshuka', author_name: 'Chef Lee', thumbnail_url: 'https://i.ytimg.example/s.jpg' } },
     'https://www.youtube.com/watch?v=shak123': '<html><head><meta property="og:description" content="Shakshuka\nIngredients\n4 eggs\n400 g tomatoes\n1 onion"></head></html>',
   });
@@ -98,6 +101,12 @@ describe('social posts (public captions only)', () => {
     assert.equal(res.status, 422);
     assert.match(res.body.error, /Instagram didn't share a caption.*Text tab.*Video tab/);
     assert.equal(res.body.code, 'no_caption');
+  });
+  it('TikTok unreachable (blocked network) → a clear way forward, not a timeout', async () => {
+    const res = await importLink('https://www.tiktok.com/@blocked/video/7000000000000000001');
+    assert.equal(res.status, 422);
+    assert.equal(res.body.code, 'no_caption');
+    assert.match(res.body.error, /couldn't reach TikTok.*Text tab.*Video tab/);
   });
   it('a caption without a recipe points to the Video tab (the recipe is probably spoken)', async () => {
     const res = await importLink('https://www.instagram.com/reel/talky/');

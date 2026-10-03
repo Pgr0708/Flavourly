@@ -174,7 +174,11 @@ export function createImporter({ config, fetcher, ai, cache, nutrition = { enric
   /** Public caption / description only — never the video file, never comments. */
   async function post(url, platform) {
     if (platform === 'tiktok') {
-      const embed = await fetcher.fetchJson(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+      // TikTok is blocked by networks in some countries (e.g. India): give a way forward, not a timeout.
+      const embed = await fetcher.fetchJson(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`).catch((error) => {
+        if (error instanceof HttpError && error.status < 500) throw error;
+        throw new HttpError(422, "We couldn't reach TikTok from our server. Copy the caption and paste it in the Text tab — or screen-record the video and add it in the Video tab.", { code: 'no_caption' });
+      });
       return { caption: embed.title ?? '', title: '', author: embed.author_name, image: embed.thumbnail_url };
     }
     if (platform === 'youtube') {
@@ -340,26 +344,167 @@ export function createAssistant({ ai, cache, nutrition = { enrich: async (draft)
   };
 }
 
-// ─── AI recipe photos (optional) ────────────────────────────────────────────────────────────
+// ─── Recipe photos: free sources first, GPT image-1 only as the last resort ──────────────────
+//
+//   1. On disk (made by GPT before)   2. Redis (found free before)   3. TheMealDB   4. Spoonacular (own daily cap)
+//   5. Pexels   6. Pixabay (downloaded: no hotlinking allowed)   7. Unsplash   8. Wikipedia (free licences only)
+//   9. Openverse (CC, commercial use)   10. GPT image-1 (~$0.01, once per dish; never for `freeOnly` lookups)
+//
+// Every free photo must be OF the dish (its own description matches the dish name) and carries the
+// credit its licence asks for. The credit rides in the URL fragment (#credit=…&credit_url=…): clients
+// never send fragments, so the image loads normally, and the credit survives saving and iCloud sync.
 
-export function createImages({ config, ai }) {
+const PHOTO_STOP = new Set(['recipe', 'easy', 'quick', 'homemade', 'home', 'style', 'with', 'and', 'the', 'best', 'simple', 'classic', 'food', 'dish']);
+const photoWords = (text) => String(text ?? '').toLowerCase().replace(/\([^)]*\)/g, ' ').split(/[^\p{L}]+/u)
+  .filter((w) => w.length >= 3 && !PHOTO_STOP.has(w));
+
+/** Does a photo's own description show this dish? Most of the dish's words must appear ("noodle" ≈ "noodles"). */
+export function describesDish(dish, text) {
+  const wanted = photoWords(dish);
+  const have = photoWords(text);
+  if (!wanted.length || !have.length) return false;
+  const stem = (w) => w.slice(0, Math.max(3, w.length - 2));
+  const found = wanted.filter((w) => have.some((h) => h.startsWith(stem(w)) || w.startsWith(stem(h))));
+  return found.length / wanted.length >= 0.6;
+}
+
+/** Adds the licence credit to an image URL's fragment. */
+export function withCredit(url, credit, creditURL) {
+  const link = new URL(url);
+  // encodeURIComponent (%20), not URLSearchParams (+): Swift's URLComponents reads "+" literally.
+  link.hash = [`credit=${encodeURIComponent(credit)}`, ...(creditURL ? [`credit_url=${encodeURIComponent(creditURL)}`] : [])].join('&');
+  return link.toString();
+}
+
+const stripTags = (html) => cleanText(String(html ?? '').replace(/<[^>]*>/g, ' '));
+
+export function createImages({ config, ai, cache, fetcher, http = fetch }) {
   const locate = (title) => {
     const name = `${sha256(title.toLowerCase()).slice(0, 32)}.jpg`;
-    return { file: path.join(config.IMAGE_DIR, name), url: `${config.PUBLIC_URL.replace(/\/$/, '')}/images/${name}` };
+    return { file: path.join(config.IMAGE_DIR, name), url: withCredit(`${config.PUBLIC_URL.replace(/\/$/, '')}/images/${name}`, 'AI-generated image') };
   };
   const exists = (file) => fs.access(file).then(() => true, () => false);
+  const foundKey = (title) => `img:found:v2:${sha256(title.toLowerCase())}`;
+  const missKey = (title) => `img:none:v1:${sha256(title.toLowerCase())}`;
+  const getJson = async (url, headers = {}) => {
+    const res = await http(url, { headers, signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) throw new Error(`${new URL(url).hostname} answered ${res.status}`);
+    return res.json();
+  };
+  const attempt = async (name, title, find) => {
+    try {
+      return await find();
+    } catch (error) {
+      log.warn(`${name} photo failed`, { title, error: error.message });
+      return null;
+    }
+  };
+
+  const sources = [
+    ['themealdb', async (title) => {
+      // Key "1" is TheMealDB's free development key; a published app needs a supporter key.
+      const data = await fetcher.fetchJson(`https://www.themealdb.com/api/json/v1/${encodeURIComponent(config.THEMEALDB_API_KEY)}/search.php?s=${encodeURIComponent(title.slice(0, 80))}`);
+      const hit = (data?.meals ?? []).find((m) => m.strMealThumb && describesDish(title, m.strMeal));
+      return hit && withCredit(hit.strMealThumb, 'Photo: TheMealDB', `https://www.themealdb.com/meal/${hit.idMeal}`);
+    }],
+    ['spoonacular', async (title) => {
+      if (!config.SPOONACULAR_API_KEY) return null;
+      // Shares its 150 points/day with nutrition: photos get their own smaller budget.
+      if ((await cache.incr(`img:spoon:${dayStart(new Date())}`, DAY)) > config.SPOONACULAR_PHOTOS_PER_DAY) return null;
+      const data = await fetcher.fetchJson(`https://api.spoonacular.com/recipes/complexSearch?query=${encodeURIComponent(title.slice(0, 80))}&number=5&apiKey=${config.SPOONACULAR_API_KEY}`);
+      const hit = (data?.results ?? []).find((r) => r.image && describesDish(title, r.title));
+      return hit && withCredit(hit.image, 'Photo via spoonacular', `https://spoonacular.com/recipes/-${hit.id}`);
+    }],
+    ['pexels', async (title) => {
+      if (!config.PEXELS_API_KEY) return null;
+      const data = await getJson(`https://api.pexels.com/v1/search?query=${encodeURIComponent(`${title} food`)}&per_page=5&orientation=landscape`, { Authorization: config.PEXELS_API_KEY });
+      const hit = (data?.photos ?? []).find((p) => p.src?.large && describesDish(title, p.alt));
+      return hit && withCredit(hit.src.large, `Photo by ${hit.photographer} on Pexels`, hit.url);
+    }],
+    ['pixabay', async (title) => {
+      if (!config.PIXABAY_API_KEY) return null;
+      const data = await getJson(`https://pixabay.com/api/?key=${encodeURIComponent(config.PIXABAY_API_KEY)}&q=${encodeURIComponent(title.slice(0, 90))}&image_type=photo&category=food&safesearch=true&per_page=5`);
+      const hit = (data?.hits ?? []).find((h) => h.largeImageURL && describesDish(title, h.tags));
+      if (!hit) return null;
+      // Pixabay forbids permanent hotlinking (its links expire): keep our own copy and serve it.
+      const res = await http(hit.largeImageURL, { signal: AbortSignal.timeout(15_000) });
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (!res.ok || bytes.length < 1_000 || bytes.length > 8_000_000) throw new Error(`download ${res.status}, ${bytes.length} bytes`);
+      const name = `pb-${sha256(title.toLowerCase()).slice(0, 32)}.jpg`;
+      await fs.mkdir(config.IMAGE_DIR, { recursive: true });
+      const temp = path.join(config.IMAGE_DIR, `${name}.${process.pid}.tmp`);
+      await fs.writeFile(temp, bytes);
+      await fs.rename(temp, path.join(config.IMAGE_DIR, name));
+      return withCredit(`${config.PUBLIC_URL.replace(/\/$/, '')}/images/${name}`, `Image by ${hit.user} from Pixabay`, hit.pageURL);
+    }],
+    ['unsplash', async (title) => {
+      if (!config.UNSPLASH_ACCESS_KEY) return null;
+      const key = `client_id=${encodeURIComponent(config.UNSPLASH_ACCESS_KEY)}`;
+      const data = await getJson(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(`${title} food`)}&per_page=5&orientation=landscape&${key}`);
+      const hit = (data?.results ?? []).find((p) => p.urls?.regular && describesDish(title, `${p.alt_description ?? ''} ${p.description ?? ''}`));
+      if (!hit) return null;
+      // Required by the Unsplash API guidelines whenever a photo is used.
+      if (hit.links?.download_location) http(`${hit.links.download_location}${hit.links.download_location.includes('?') ? '&' : '?'}${key}`).catch(() => {});
+      return withCredit(hit.urls.regular, `Photo by ${hit.user?.name ?? 'Unsplash'} on Unsplash`, `${hit.user?.links?.html ?? 'https://unsplash.com'}?utm_source=flavourly&utm_medium=referral`);
+    }],
+    ['wikipedia', async (title) => {
+      const api = 'https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1';
+      const query = (await fetcher.fetchJson(`${api}&prop=pageimages&piprop=thumbnail%7Cname&pithumbsize=800&titles=${encodeURIComponent(title)}`))?.query ?? {};
+      // A redirect from this exact name is Wikipedia's own "same dish" ("Spaghetti carbonara" → "Carbonara").
+      const redirected = (query.redirects ?? []).some((r) => r.from?.toLowerCase() === title.toLowerCase());
+      const page = Object.values(query.pages ?? {}).find((p) => p.thumbnail?.source && p.pageimage && (redirected || describesDish(title, p.title)));
+      if (!page) return null;
+      // Only freely licensed files: article images can be non-free "fair use" pictures.
+      const files = (await fetcher.fetchJson(`${api}&prop=imageinfo&iiprop=extmetadata%7Curl&titles=${encodeURIComponent(`File:${page.pageimage}`)}`))?.query?.pages ?? {};
+      const info = Object.values(files)[0]?.imageinfo?.[0];
+      const meta = info?.extmetadata ?? {};
+      const licence = stripTags(meta.LicenseShortName?.value);
+      if (!licence || meta.NonFree?.value === 'true' || /fair use|non-free/i.test(licence)) return null;
+      const author = stripTags(meta.Artist?.value).slice(0, 60) || 'Wikimedia Commons';
+      return withCredit(page.thumbnail.source, `Photo: ${author} · ${licence}`, info.descriptionurl);
+    }],
+    ['openverse', async (title) => {
+      // Creative Commons search; only licences that allow commercial use. No key needed (low anonymous limit).
+      const data = await fetcher.fetchJson(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(`${title} food`)}&license_type=commercial&mature=false&page_size=5`);
+      const hit = (data?.results ?? []).find((r) => r.thumbnail && r.license && describesDish(title, `${r.title ?? ''} ${(r.tags ?? []).map((t) => t.name).join(' ')}`));
+      if (!hit) return null;
+      const licence = ['cc0', 'pdm'].includes(hit.license) ? hit.license.toUpperCase() : `CC ${hit.license.toUpperCase()} ${hit.license_version ?? ''}`.trim();
+      return withCredit(hit.thumbnail, `Photo: ${(hit.creator || 'Openverse').slice(0, 60)} · ${licence}`, hit.foreign_landing_url);
+    }],
+  ];
 
   return {
-    /** URL of an already generated photo for this title, or null. Free: no AI call. */
+    /** A photo already made or found for this title, or null. */
     async existing(title) {
       const { file, url } = locate(title);
-      return (await exists(file)) ? url : null;
+      if (await exists(file)) return url;
+      return (await cache.get(foundKey(title)))?.url ?? null;
     },
 
-    async recipePhoto({ title, description }) {
-      if (!config.IMAGE_GENERATION) throw new HttpError(501, "Photo creation isn't turned on for this server.");
+    /** The dish's photo URL (with credit), searching free sources once per title before paying for GPT. */
+    async recipePhoto({ title, description, sourceImageURL, freeOnly = false }) {
       const { file, url } = locate(title);
       if (await exists(file)) return { url };
+      if (sourceImageURL) return { url: sourceImageURL };
+      const known = await cache.get(foundKey(title));
+      if (known?.url) return { url: known.url };
+
+      // A recent miss: don't ask every free API again for a few days.
+      if (!(await cache.get(missKey(title)))) {
+        for (const [name, find] of sources) {
+          const found = await attempt(name, title, () => find(title));
+          if (found) {
+            await cache.set(foundKey(title), { url: found }, 30 * DAY);
+            log.info('free photo found', { title, source: name });
+            return { url: found };
+          }
+        }
+        await cache.set(missKey(title), { at: Date.now() }, 3 * DAY);
+      }
+
+      if (freeOnly) throw new HttpError(404, 'No free photo matches this dish yet.', { code: 'no_photo' });
+      if (!config.IMAGE_GENERATION) throw new HttpError(501, "Photo creation isn't turned on for this server.");
+      log.info('no free photo matched, generating with GPT', { title });
       const bytes = await ai.image({ prompt: imagePrompt({ title, description }), model: config.IMAGE_MODEL, quality: config.IMAGE_QUALITY });
       await fs.mkdir(config.IMAGE_DIR, { recursive: true });
       const temp = `${file}.${process.pid}.tmp`;

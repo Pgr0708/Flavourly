@@ -262,7 +262,7 @@ struct ImportView: View {
             }
             Label("Photos stay on your iPhone — only the text we read is used.", systemImage: "lock.fill")
                 .font(Theme.micro).foregroundStyle(Theme.muted)
-            PrimaryButton(title: images.isEmpty ? "Read photos" : "Read \(images.count) photo\(images.count == 1 ? "" : "s")",
+            PrimaryButton(title: images.isEmpty ? "Read photos" : String(format: Lang.text("Read photos: %lld"), images.count),
                           systemImage: "text.viewfinder", isEnabled: !images.isEmpty) {
                 let pages = images
                 run { try await importer.importImages(pages) }
@@ -311,19 +311,42 @@ struct ImportView: View {
         VStack(alignment: .leading, spacing: 14) {
             PhotosPicker(selection: $videoItem, matching: .videos) {
                 sourceCardLabel(symbol: "video.badge.waveform", title: "Choose a video from your library",
-                                subtitle: "A cooking video you recorded or saved", tint: Theme.plan)
+                                subtitle: "A cooking video you recorded, saved or screen-recorded", tint: Theme.plan)
             }
             .buttonStyle(PressableStyle(scale: 0.98))
             VStack(alignment: .leading, spacing: 10) {
-                howRow(1, "We listen to the audio on your iPhone")
-                howRow(2, "The spoken steps become a written recipe")
+                howRow(1, settings.isPremium ? "We listen to the whole video (up to 20 min)" : "We listen to the audio on your iPhone")
+                howRow(2, "We read recipe text shown on screen too")
                 howRow(3, "You check it before it's saved")
-                Text("Use videos you own or have saved yourself. For Instagram or TikTok, share the link instead.")
+                Text("Only the sound is used — the video never leaves your iPhone.")
                     .font(Theme.micro).foregroundStyle(Theme.muted)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .card(padding: 14)
+            screenRecordGuide
+            if !settings.isPremium {
+                Button { showPaywall = true } label: {
+                    Label("Premium listens to whole videos with better accuracy", systemImage: "crown.fill")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.premiumDeep)
+                }
+            }
             writeItButton
         }
+    }
+
+    /// TikTok / Instagram / Facebook don't share their videos with apps; the user can record their own screen.
+    private var screenRecordGuide: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Recipe only in a TikTok, Reel or YouTube video?", systemImage: "record.circle")
+                .font(Theme.rowTitle)
+            howRow(1, "Open Control Center and tap Screen Recording")
+            howRow(2, "Play the video with the sound on")
+            howRow(3, "Stop recording, then choose it above")
+            Text("No Screen Recording button? Add it in Settings › Control Center. For your own cooking only — please don't repost creators' videos.")
+                .font(Theme.micro).foregroundStyle(Theme.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(padding: 14)
     }
 
     private var writeItButton: some View {
@@ -341,7 +364,7 @@ struct ImportView: View {
 
     // MARK: Pieces
 
-    private func howRow(_ number: Int, _ text: String) -> some View {
+    private func howRow(_ number: Int, _ text: LocalizedStringKey) -> some View {
         HStack(spacing: 10) {
             Text("\(number)")
                 .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.green)
@@ -433,6 +456,9 @@ struct ImportView: View {
             } else {
                 PrimaryButton(title: "Try again", systemImage: "arrow.clockwise") { restart(start) }
                 PrimaryButton(title: "Paste the text instead", systemImage: "doc.on.clipboard", tone: .outline) { restart(.text) }
+                if start == .link {
+                    PrimaryButton(title: "Use a video I saved", systemImage: "video.badge.waveform", tone: .outline) { restart(.video) }
+                }
             }
         }
         .card(padding: 16)

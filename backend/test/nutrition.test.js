@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { createCache } from '../src/cache.js';
-import { createNutrition, parseLine, pickFood, singular } from '../src/nutrition.js';
+import { createNutrition, hasNutrients, parseLine, pickFood, singular } from '../src/nutrition.js';
 import { fakeFoodApis } from './fake-openai.js';
 import { setup, stubFetcher } from './helpers.js';
 
@@ -19,6 +19,10 @@ describe('ingredient line parser', () => {
     ['Salt to taste', null, null, 'salt'],
     ['2 kg of potatoes', 2, 'kg', 'potatoes'],
     ['1,5 l milk', 1.5, 'l', 'milk'],
+    ['200 g cooked white rice', 200, 'g', 'cooked white rice'], // cooking state changes calories ~3×
+    ['250 g raw chicken breast, diced', 250, 'g', 'raw chicken breast'],
+    ['1 cup chickpeas, cooked', 1, 'cup', 'cooked chickpeas'],
+    ['1 can chickpeas, drained and rinsed', 1, 'can', 'chickpeas'],
   ];
   for (const [line, quantity, unit, name] of cases) {
     it(line, () => assert.deepEqual(parseLine(line), { quantity, unit, name }));
@@ -40,6 +44,37 @@ describe('choosing the right USDA food (real search results)', () => {
   });
   it('onion → raw onion, not restaurant onion rings or dried flakes', () => {
     assert.equal(pick('onion', ['DENNY\'S, onion rings', 'Onions, dehydrated flakes', 'Onions, raw']), 'Onions, raw');
+  });
+  it('cooked white rice → regular rice, not sticky (glutinous) rice listed first', () => {
+    assert.equal(pick('cooked white rice', ['Rice, white, glutinous, unenriched, cooked', 'Rice, white, medium-grain, cooked, unenriched', 'Rice, white, long-grain, regular, enriched, cooked']),
+      'Rice, white, medium-grain, cooked, unenriched');
+    assert.equal(pick('glutinous rice', ['Rice, white, long-grain, regular, raw', 'Rice, white, glutinous, unenriched, uncooked']), 'Rice, white, glutinous, unenriched, uncooked');
+  });
+  it('the main food leads USDA names: milk is not "Crackers, milk", salt is not "Butter, salted"', () => {
+    assert.equal(pick('milk', ['Crackers, milk', 'Candies, milk chocolate', 'Milk, sheep, fluid', 'Milk, whole, 3.25% milkfat, with added vitamin D']), 'Milk, whole, 3.25% milkfat, with added vitamin D');
+    assert.equal(pick('salt', ['Butter, salted', 'Salt, table', 'Fish, mackerel, salted']), 'Salt, table');
+    assert.equal(pick('butter', ['Butter, Clarified butter (ghee)', 'Butter, salted', 'Croissants, butter', 'Almond butter, creamy']), 'Butter, salted');
+    assert.equal(pick('canned tomatoes', ['Tomato, puree, canned', 'Tomatoes, red, ripe, canned, packed in tomato juice']), 'Tomatoes, red, ripe, canned, packed in tomato juice');
+    assert.equal(pick('ghee', ['Butter, salted', 'Butter, Clarified butter (ghee)']), 'Butter, Clarified butter (ghee)');
+  });
+  it('a dish built on the food is not the food (milk bar, potato pancakes, peas and carrots)', () => {
+    assert.equal(pick('milk', ['Milk and cereal bar', 'Milk, whole, 3.25% milkfat, with added vitamin D']), 'Milk, whole, 3.25% milkfat, with added vitamin D');
+    assert.equal(pick('potato', ['Potato pancakes', 'Potatoes, flesh and skin, raw']), 'Potatoes, flesh and skin, raw');
+    assert.equal(pick('frozen pea', ['Peas and carrots, frozen, unprepared', 'Peas, green, frozen, unprepared']), 'Peas, green, frozen, unprepared');
+  });
+  it('parts and pod varieties only when asked (potato skin, snow peas)', () => {
+    assert.equal(pick('potato', ['Potatoes, raw, skin', 'Potatoes, flesh and skin, raw']), 'Potatoes, flesh and skin, raw');
+    assert.equal(pick('potato', ['Potatoes, hash brown, home-prepared', 'Potatoes, mashed, ready-to-eat', 'Potatoes, flesh and skin, raw']), 'Potatoes, flesh and skin, raw');
+    assert.equal(pick('frozen pea', ['Peas, edible-podded, frozen, unprepared', 'Peas, green, frozen, unprepared']), 'Peas, green, frozen, unprepared');
+    assert.equal(pick('cumin seed', ['Spices, cumin seed']), 'Spices, cumin seed');
+    assert.equal(pick('cooked chickpea', ['Chickpeas (garbanzo beans, bengal gram), mature seeds, raw', 'Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt']),
+      'Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt');
+  });
+  it('foods listed without nutrient values are skipped (USDA Foundation olive oil)', () => {
+    const value = (nutrientNumber, v) => ({ nutrientNumber, value: v });
+    assert.equal(hasNutrients({ foodNutrients: [] }), false);
+    assert.equal(hasNutrients({ foodNutrients: [value('208', 884), value('204', 100)] }), true);
+    assert.equal(hasNutrients({ foodNutrients: [value('204', 100)] }), true);
   });
   it('asking for a form keeps it (cooked rice, egg white)', () => {
     assert.equal(pick('cooked rice', ['Rice, white, long-grain, regular, raw', 'Rice, white, long-grain, regular, cooked']), 'Rice, white, long-grain, regular, cooked');

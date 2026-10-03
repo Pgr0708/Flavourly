@@ -36,7 +36,7 @@ function recipeFromText(text) {
       });
     }
   }
-  const title = lines.find((line) => !/^(kind|source):/i.test(line) && !/^\d/.test(line) && !/^[-•*]/.test(line)) ?? 'Shared recipe';
+  const title = lines.find((line) => !/^(kind|source):/i.test(line) && !line.startsWith('[') && !/^\d/.test(line) && !/^[-•*]/.test(line)) ?? 'Shared recipe';
   return {
     title: title.replace(/[#!]+/g, '').slice(0, 80),
     summary: null, servings: 2, prepMinutes: 10, cookMinutes: 20, totalMinutes: 30, cuisine: null,

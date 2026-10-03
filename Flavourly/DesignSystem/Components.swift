@@ -419,8 +419,30 @@ struct IconTile: View {
 
 // MARK: - Media
 
-/// Recipe photo: stored photo → bundled image → web thumbnail → illustrated fallback.
+/// The small "Photo by … on Pexels" tag photo licences ask for; opens the photographer's page when there is one.
+struct CreditLabel: View {
+    let credit: ImageCredit
+
+    var body: some View {
+        // Photographer credits stay as written; only our own "AI-generated image" is translated.
+        let label = (credit.text == "AI-generated image" ? Text("AI-generated image") : Text(verbatim: credit.text))
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.black.opacity(0.45), in: Capsule())
+            .padding(10)
+        if let url = credit.link {
+            Link(destination: url) { label }.accessibilityHint("Opens the photo's source")
+        } else {
+            label
+        }
+    }
+}
+
 /// Small source images get a blurred backdrop instead of being stretched.
+/// Recipe photo: stored photo → bundled image → web thumbnail → illustrated fallback.
 struct RecipeImage: View {
     let recipe: Recipe?
     var cornerRadius: CGFloat = 16
@@ -433,6 +455,12 @@ struct RecipeImage: View {
                 .clipped()
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay(alignment: .bottomTrailing) {
+            // Only for web photos actually shown, above the rounded content card that overlaps the hero.
+            if isHero, recipe?.imageData == nil, recipe?.imageName == nil, let credit = ImageCredit(recipe?.imageURL) {
+                CreditLabel(credit: credit).padding(.bottom, 30)
+            }
+        }
     }
 
     @ViewBuilder

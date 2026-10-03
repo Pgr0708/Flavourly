@@ -69,9 +69,33 @@ enum Kitchen {
         if let nutrition = draft.nutrition { apply(nutrition, to: recipe) }
         recipe.needsReview = !draft.flags.isEmpty
         recipe.reviewNotes = draft.flags.isEmpty ? nil : (try? JSONEncoder().encode(draft.flags)).flatMap { String(data: $0, encoding: .utf8) }
-        if commit, target == nil { save() }
+        if commit, target == nil {
+            save()
+            if !recipe.hasPhoto { Task { await fillMissingPhotos() } }
+        }
         return recipe
     }
+
+    /// Finds a free, credited photo for saved recipes that have none (never GPT, not counted against
+    /// the free plan). Dishes with no match are retried after 3 days, like the server.
+    static func fillMissingPhotos(limit: Int = 15) async {
+        guard !isFillingPhotos else { return }
+        isFillingPhotos = true
+        defer { isFillingPhotos = false }
+        let bare = CoreDataManager.shared.fetch(Recipe.self, NSPredicate(format: "isSaved == YES AND imageURL == nil AND imageData == nil AND imageName == nil"))
+        var tried = UserDefaults.standard.dictionary(forKey: "photoLookups") as? [String: Double] ?? [:]
+        let now = Date.now.timeIntervalSince1970
+        for recipe in bare.prefix(limit) {
+            let title = recipe.displayTitle
+            guard title != "Untitled recipe", now - (tried[title.lowercased()] ?? 0) > 3 * 86_400 else { continue }
+            tried[title.lowercased()] = now
+            guard let url = try? await AIService.freePhotoURL(title: title), !recipe.isDeleted, !recipe.hasPhoto else { continue }
+            recipe.imageURL = url
+            save()
+        }
+        UserDefaults.standard.set(tried.filter { now - $0.value < 3 * 86_400 }, forKey: "photoLookups")
+    }
+    private static var isFillingPhotos = false
 
     /// Library recipes live in memory; anything the user saves or plans is copied into their kitchen.
     @discardableResult

@@ -123,6 +123,7 @@ struct ContentView: View {
         .task {
             RankContext.skillCap = Difficulty(skill: settings.customizationPreferences.choices["skill"]?.first)
             Kitchen.relearnTaste()
+            Task { await Kitchen.fillMissingPhotos() }
             processSharedInbox()
             Task { await Usage.sync() }
             NotificationService.shared.reschedule()

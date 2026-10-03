@@ -20,7 +20,8 @@ const UNITS = [
 ];
 const GRAMS = { kg: 1000, g: 1, mg: 0.001, lb: 453.6, oz: 28.35 };
 const ML = { l: 1000, ml: 1, cup: 236.6, tbsp: 14.79, tsp: 4.93 };
-const NOISE = /\b(fresh(ly)?|finely|roughly|thinly|chopped|diced|sliced|minced|grated|crushed|ground|peeled|large|medium|small|ripe|boneless|skinless|optional|to taste|for garnish|divided|softened|melted|cooked|raw|organic|about|approx\.?)\b/gi;
+// Not noise: cooked/raw change the food (200 g cooked rice ≈ 260 kcal, raw ≈ 730).
+const NOISE = /\b(fresh(ly)?|finely|roughly|thinly|chopped|diced|sliced|minced|grated|crushed|ground|peeled|large|medium|small|ripe|boneless|skinless|optional|to taste|for garnish|divided|softened|melted|organic|about|approx\.?)\b/gi;
 
 function number(token) {
   if (FRACTIONS[token] != null) return FRACTIONS[token];
@@ -54,7 +55,11 @@ export function parseLine(text) {
     const match = UNITS.find(([, pattern]) => pattern.test(word) || pattern.test(word.toLowerCase()));
     if (match) { unit = match[0]; i += 1; if (/^of$/i.test(tokens[i] ?? '')) i += 1; }
   }
-  const name = tokens.slice(i).join(' ').split(/,| - | – /)[0].replace(NOISE, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const [first, ...rest] = tokens.slice(i).join(' ').split(/,| - | – /);
+  // "1 cup chickpeas, cooked": the state after the comma still decides which food it is.
+  const state = /\b(cooked|boiled|raw|canned|frozen|dried)\b/i.exec(rest.join(' '))?.[1];
+  const base = first.replace(NOISE, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const name = state && !base.includes(state.toLowerCase()) ? `${state.toLowerCase()} ${base}` : base;
   return { quantity, unit, name };
 }
 
@@ -102,7 +107,13 @@ function sameFood(query, description) {
 }
 
 // Parts and processed forms of a food: never the default unless the line asks for them.
-const PROCESSED = /\b(egg white|egg whites|yolk|yolks|flour|powder|powdered|dehydrated|dried|flakes|babyfood|rings|fried|cooked|canned|frozen|juice|sauce|soup|chips|bagels?|snacks?|mix|substitute|imitation|sweetened|candied)\b/g;
+const PROCESSED = /\b(egg white|egg whites|yolk|yolks|flour|powder|powdered|dehydrated|dried|flakes|babyfood|rings|fried|cooked|canned|frozen|juice|sauce|soup|chips|bagels?|snacks?|mix|substitute|imitation|sweetened|candied|puree|paste|prepared|mashed|hash)\b/g;
+
+// Niche varieties: fine when asked for, never the default ("white rice" is not sticky rice).
+const VARIETY = /\b(glutinous|parboiled|instant|sprouted|low sodium|reduced fat|fat free|ghee|anhydrous|sheep|goat|buffalo|human|podded)\b/g;
+
+/** USDA search sometimes lists foods without any nutrient values (some Foundation entries) — unusable. */
+export const hasNutrients = (food) => (food.foodNutrients ?? []).some((n) => ['208', '957', '958', '203', '204', '205'].includes(String(n.nutrientNumber)) && Number.isFinite(n.value));
 
 /**
  * Best USDA candidate for an ingredient, or null. USDA names put the food first ("Oil, olive, …"),
@@ -115,10 +126,25 @@ export function pickFood(query, foods) {
   foods.forEach((food, index) => {
     const description = food.description ?? '';
     if (!sameFood(query, description)) return;
-    const lower = description.toLowerCase();
-    const head = lower.split(',').slice(0, 2).join(' ');
-    let score = words.filter((w) => head.includes(stem(w))).length * 2 - index * 0.5;
-    for (const part of lower.match(PROCESSED) ?? []) if (!query.toLowerCase().includes(part)) score -= 3;
+    // "Chickpeas (garbanzo beans, bengal gram), mature seeds": brackets are aliases, not name segments.
+    const full = description.toLowerCase();
+    const lower = full.replace(/\([^)]*\)/g, '');
+    const head = full.split(',').slice(0, 2).join(' ');
+    let score = words.filter((w) => head.includes(stem(w))).length * 2 - index * 0.15;
+    // USDA names lead with the food itself ("Milk, whole", "Salt, table"): the main noun there is the real match,
+    // not "Crackers, milk" or "Butter, salted".
+    const noun = words.at(-1);
+    const first = lower.split(',')[0].split(/[^a-z]+/).filter((w) => w.length >= 3);
+    const isNoun = (w) => Boolean(noun) && (w.startsWith(stem(noun)) || noun.startsWith(stem(w)));
+    if (first.length && isNoun(first.at(-1))) score += 3; // "Wheat flour" for flour, "Oil, olive" for olive oil
+    // "Milk and cereal bar", "Potato pancakes", "Peas and carrots": the food is only part of another dish.
+    else if (first.some(isNoun)) score -= 2;
+    // A part on its own ("Potatoes, raw, skin") — not "flesh and skin" or legumes' "mature seeds".
+    if (lower.split(',').some((segment) => /^\s*(skin|peel|leaves|stems?|seeds?)\s*$/.test(segment) && !query.toLowerCase().includes(segment.trim()))) score -= 4;
+    if (food.dataType === 'SR Legacy') score += 1; // full household portions (clove, cup, medium); Foundation often has none
+    // "packed in tomato juice" describes the can, not the food.
+    for (const part of full.replace(/packed in [^,]*/g, '').match(PROCESSED) ?? []) if (!query.toLowerCase().includes(part)) score -= 3;
+    for (const kind of full.match(VARIETY) ?? []) if (!query.toLowerCase().includes(kind)) score -= 2;
     if (/\b(raw|whole|uncooked)\b/.test(lower)) score += 1;
     if (/[A-Z]{3,}/.test(description.replace(/\b(USDA|NFS|UPC)\b/g, ''))) score -= 4; // "DENNY'S, onion rings"
     score -= Math.max(0, lower.split(',').length - 3) * 0.3;
@@ -136,10 +162,10 @@ export function createNutrition({ config, cache, http = fetch }) {
 
   /** One USDA food per ingredient name: nutrients per 100 g + household portions in grams. */
   async function usdaFood(name) {
-    const { value } = await cache.wrap(`usda:v2:${sha256(name)}`, 30 * DAY, async () => {
+    const { value } = await cache.wrap(`usda:v10:${sha256(name)}`, 30 * DAY, async () => {
       const key = encodeURIComponent(config.USDA_API_KEY);
-      const found = await get(`${USDA}/foods/search?api_key=${key}&pageSize=10&dataType=Foundation,SR%20Legacy&query=${encodeURIComponent(name)}`);
-      const food = pickFood(name, found.foods ?? []);
+      const found = await get(`${USDA}/foods/search?api_key=${key}&pageSize=25&dataType=Foundation,SR%20Legacy&query=${encodeURIComponent(name)}`);
+      const food = pickFood(name, (found.foods ?? []).filter(hasNutrients));
       if (!food) return { none: true };
       const pick = (numbers) => {
         for (const n of numbers) {
@@ -151,7 +177,8 @@ export function createNutrition({ config, cache, http = fetch }) {
       const nutrients = Object.fromEntries(Object.entries(NUTRIENTS).map(([k, numbers]) => [k, pick(numbers)]));
       if (!nutrients.calories) nutrients.calories = 4 * nutrients.protein + 4 * nutrients.carbs + 9 * nutrients.fat;
       const detail = await get(`${USDA}/food/${food.fdcId}?api_key=${key}`).catch(() => ({}));
-      const portions = (detail.foodPortions ?? []).filter((p) => p.gramWeight > 0).map((p) => ({
+      // RACC is a label serving size, not a unit — "1 clove" must never mean 85 g.
+      const portions = (detail.foodPortions ?? []).filter((p) => p.gramWeight > 0 && p.measureUnit?.name !== 'RACC').map((p) => ({
         label: [p.measureUnit?.name !== 'undetermined' ? p.measureUnit?.name : null, p.modifier, p.portionDescription]
           .filter(Boolean).join(' ').toLowerCase().replace(/^tablespoon/, 'tbsp').replace(/^teaspoon/, 'tsp'),
         grams: p.gramWeight / (p.amount || 1),

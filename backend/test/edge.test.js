@@ -35,8 +35,8 @@ const rows = [
   ['/v1/ai/extract', { text: '<p></p>'.repeat(10) }, 400, 'text'],
   ['/v1/ai/extract', { text: 'a'.repeat(19) }, 400, 'text'],
   ['/v1/ai/extract', { text: 'a'.repeat(20) }, 422, null], // valid input, but not a recipe
-  ['/v1/ai/extract', { text: `${RECIPE}\n${'x'.repeat(12_000 - RECIPE.length - 1)}` }, 200, null],
-  ['/v1/ai/extract', { text: 'x'.repeat(12_001) }, 400, 'text'],
+  ['/v1/ai/extract', { text: `${RECIPE}\n${'x'.repeat(20_000 - RECIPE.length - 1)}` }, 200, null],
+  ['/v1/ai/extract', { text: 'x'.repeat(20_001) }, 400, 'text'],
   ['/v1/ai/extract', { text: RECIPE, kind: 'ocr', sourceURL: 'javascript:alert(1)' }, 400, 'sourceURL'],
   ['/v1/ai/extract', { text: 'पनीर टिक्का\nसामग्री\n- 200 g paneer\n- 1 onion\nविधि\n1. Grill for 10 min' }, 200, null],
 

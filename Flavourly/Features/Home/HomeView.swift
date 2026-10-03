@@ -108,16 +108,27 @@ struct HomeView: View {
 
     // MARK: Header — full-bleed photo under the status bar that stretches when pulled down
 
+    /// The art is a wide panorama in a near-square header: centre-cropping hid the cook behind the profile
+    /// button. Instead, place the cook's face about two-thirds across, clear of the greeting and the button.
+    private func headerArt(_ moment: HomeMoment, size: CGSize) -> some View {
+        let art = UIImage(named: moment.imageName)?.size ?? size
+        let scale = max(size.width / art.width, size.height / art.height)
+        let drawn = CGSize(width: art.width * scale, height: art.height * scale)
+        let offset = min(0, max(size.width - drawn.width, size.width * 0.66 - drawn.width * moment.focusX))
+        return Image(moment.imageName)
+            .resizable()
+            .frame(width: drawn.width, height: drawn.height)
+            .offset(x: offset)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .clipped()
+    }
+
     private func header(_ moment: HomeMoment) -> some View {
         GeometryReader { geometry in
             let minY = geometry.frame(in: .global).minY
             let pull = max(0, minY)
             ZStack(alignment: .topLeading) {
-                Image(moment.imageName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: headerHeight + pull)
-                    .clipped()
+                headerArt(moment, size: CGSize(width: geometry.size.width, height: headerHeight + pull))
                     .overlay {
                         LinearGradient(colors: [.black.opacity(0.5), .black.opacity(0.05), .black.opacity(0.3)], startPoint: .top, endPoint: .bottom)
                     }

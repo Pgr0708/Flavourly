@@ -13,7 +13,10 @@
     "dev": "node --watch src/server.js",
     "migrate": "node src/migrate.js",
     "fake-openai": "node test/fake-openai.js",
-    "test": "node --test --test-concurrency=1 test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "check:live": "node scripts/live-check.js",
+    "check:nutrition": "node scripts/nutrition-bench.js",
+    "check:photos": "node scripts/photo-check.js"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

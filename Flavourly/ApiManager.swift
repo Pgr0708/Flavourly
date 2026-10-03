@@ -15,6 +15,7 @@ enum APIError: LocalizedError, Equatable {
     case limit(String)
     case server(String)
     case invalidResponse
+    case premiumRequired
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +24,7 @@ enum APIError: LocalizedError, Equatable {
         case .limit(let message): message
         case .server(let message): message
         case .invalidResponse: "The server sent something unexpected."
+        case .premiumRequired: "This is part of Premium."
         }
     }
 }
@@ -54,15 +56,34 @@ final class APIClient {
     }
 
     func post<Body: Encodable, Reply: Decodable>(_ path: String, _ body: Body, as: Reply.Type = Reply.self) async throws -> Reply {
+        try await withDevice { try await send(path, body: body) }
+    }
+
+    /// Raw upload (Premium video audio). Its own long timeouts: a 20-minute track is ~20 MB.
+    func upload<Reply: Decodable>(_ path: String, data: Data, contentType: String, as: Reply.Type = Reply.self) async throws -> Reply {
+        try await withDevice { try await send(path, data: data, contentType: contentType, session: uploadSession) }
+    }
+
+    /// Runs a request, re-registering once if the session expired. Only the call whose token failed clears
+    /// it: the server issues a new token on every registration, so a second parallel one would cancel the first.
+    private func withDevice<Reply>(_ request: () async throws -> Reply) async throws -> Reply {
         try await ensureDevice()
+        let used = token
         do {
-            return try await send(path, body: body)
+            return try await request()
         } catch APIError.unauthorized {
-            token = nil
+            if token == used { token = nil }
             try await ensureDevice()
-            return try await send(path, body: body)
+            return try await request()
         }
     }
+
+    private lazy var uploadSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 180
+        configuration.timeoutIntervalForResource = 600
+        return URLSession(configuration: configuration)
+    }()
 
     func eraseRemoteData() async {
         struct Empty: Codable {}
@@ -70,27 +91,43 @@ final class APIClient {
         token = nil
     }
 
+    /// One registration at a time: calls that arrive meanwhile wait for it and share the new token.
+    private var registering: Task<String, Error>?
+
     private func ensureDevice() async throws {
         guard token == nil else { return }
+        if let registering {
+            token = try await registering.value
+            return
+        }
         struct Body: Encodable { let installID: String; let platform: String; let appVersion: String }
         struct Reply: Decodable { let token: String }
-        let reply: Reply = try await send(
-            Apis.registerDevice, body: Body(installID: installID, platform: "ios", appVersion: AppInfo.version), authorized: false
-        )
-        token = reply.token
+        let task = Task { () async throws -> String in
+            let reply: Reply = try await send(
+                Apis.registerDevice, body: Body(installID: installID, platform: "ios", appVersion: AppInfo.version), authorized: false
+            )
+            return reply.token
+        }
+        registering = task
+        defer { registering = nil }
+        token = try await task.value
     }
 
     private func send<Body: Encodable, Reply: Decodable>(_ path: String, body: Body, authorized: Bool = true) async throws -> Reply {
+        try await send(path, data: try encoder.encode(body), contentType: "application/json", authorized: authorized, session: session)
+    }
+
+    private func send<Reply: Decodable>(_ path: String, data body: Data, contentType: String, authorized: Bool = true, session: URLSession) async throws -> Reply {
         var request = URLRequest(url: Apis.baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.setValue(AppInfo.version, forHTTPHeaderField: "X-App-Version")
         if authorized, let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         if hasRevenueCatAPIKey, Purchases.isConfigured {
             // The server confirms Premium with RevenueCat itself; this only says which customer to check.
             request.setValue(Purchases.shared.appUserID, forHTTPHeaderField: "X-RC-App-User")
         }
-        request.httpBody = try encoder.encode(body)
+        request.httpBody = body
 
         let data: Data
         let response: URLResponse
@@ -107,6 +144,8 @@ final class APIClient {
             throw APIError.unauthorized
         case 402, 429:
             throw APIError.limit(message(from: data) ?? "You've reached this week's free limit.")
+        case 403:
+            throw APIError.premiumRequired
         default:
             throw APIError.server(message(from: data) ?? "Something went wrong on our side (\(http.statusCode)).")
         }

@@ -20,7 +20,7 @@ export function build(config, { fetcher: customFetcher, now, http } = {}) {
     usage: createUsage({ db, config, ...(now ? { now } : {}) }),
     importer: createImporter({ config, fetcher, ai, cache, nutrition }),
     assistant: createAssistant({ ai, cache, nutrition }),
-    images: createImages({ config, ai }),
+    images: createImages({ config, ai, cache, fetcher }),
   };
   deps.discover = createDiscover({ ai, cache, config, images: deps.images, fetcher, nutrition });
   return { ...deps, app: createApp(deps) };

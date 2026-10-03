@@ -18,6 +18,12 @@ struct DomainCheck {
     }
 
     static func main() {
+        // Photo credits travel in the URL fragment (server: withCredit in services.js).
+        let pexels = ImageCredit("https://images.pexels.com/2.jpg#credit=Photo%20by%20Asha%20on%20Pexels&credit_url=https%3A%2F%2Fpexels.com%2Fphoto%2F2")
+        check(pexels?.text == "Photo by Asha on Pexels" && pexels?.link?.absoluteString == "https://pexels.com/photo/2", "pexels credit parsed: \(String(describing: pexels))")
+        check(ImageCredit("https://api.example.com/images/a.jpg#credit=AI-generated%20image")?.link == nil, "AI credit has no link")
+        check(ImageCredit("https://img.example.com/a.jpg") == nil, "no fragment → no credit")
+        check(ImageCredit("https://x.com/a.jpg#credit=Hi&credit_url=javascript%3Aalert(1)")?.link == nil, "only http(s) credit links")
         // Allergens — the traps competitor reviews complain about.
         check(!allergens("400 ml coconut milk").contains(.milk), "coconut milk is not dairy")
         check(certain("200 ml heavy cream", .milk) == true, "cream is dairy")

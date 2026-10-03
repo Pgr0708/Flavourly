@@ -111,13 +111,56 @@ struct APIContractCheck {
             struct Image: Encodable { let title: String; let description: String? }
             (code, body) = try await post("v1/images/recipe", Image(title: "Masala omelette", description: nil), token: token)
             struct ImageReply: Decodable { let url: String }
-            if code == 501 { print("⚠︎ AI photos are off on this server (IMAGE_GENERATION=0)") } else { check(code == 200 && (decode(ImageReply.self, body)?.url.hasSuffix(".jpg") ?? false), "AI photo URL decodes") }
+            if code == 501 { print("⚠︎ AI photos are off on this server (IMAGE_GENERATION=0)") } else {
+                let photo = decode(ImageReply.self, body)?.url ?? ""
+                check(code == 200 && URL(string: photo)?.path.hasSuffix(".jpg") == true, "photo URL decodes: \(photo)")
+                check(ImageCredit(photo) != nil, "the app reads the photo's licence credit: \(ImageCredit(photo)?.text ?? "none")")
+            }
 
             (code, body) = try await post("v1/ai/substitutes", Swap(ingredient: "", recipeTitle: "x", otherIngredients: [], rules: Rules()), token: token)
             check(code == 400 && !(decode(Failure.self, body)?.error ?? "").isEmpty, "validation errors carry a readable `error` message")
 
             (code, _) = try await post("v1/ai/plan", Empty(), token: "not-a-token")
             check(code == 401, "bad token → 401 (the app re-registers)")
+
+            // Long pastes: the app allows 20,000 characters, so the server must too.
+            let long = text + "\n" + String(repeating: "Notes about the dish. ", count: 700)
+            (code, body) = try await post("v1/ai/extract", Extract(text: String(long.prefix(Validate.Limit.pasted)), kind: "text", sourceURL: nil, rules: Rules()), token: token)
+            check(code == 200, "extract accepts the app's full paste limit (\(Validate.Limit.pasted) characters)")
+
+            // Usage counters (Usage.sync in ApiManager.swift).
+            struct Counter: Decodable { let used: Int; let limit: Int }
+            struct UsageReply: Decodable { let features: [String: Counter] }
+            (code, body) = try await post("v1/usage", Empty(), token: token)
+            let features = decode(UsageReply.self, body)?.features ?? [:]
+            check(code == 200 && ["importRecipe", "aiPlan", "aiIdeas", "aiSwap", "aiImage", "extract"].allSatisfy { features[$0] != nil },
+                  "usage decodes every feature the app shows: \(features.keys.sorted())")
+
+            // Verified nutrition (AIService.nutrition): nil is a valid answer when too few lines match.
+            struct Nutrition: Encodable { let lines: [String]; let servings: Int }
+            struct NutritionReply: Decodable { let nutrition: DraftNutrition? }
+            (code, body) = try await post("v1/nutrition", Nutrition(lines: ["200 g rice", "2 eggs"], servings: 2), token: token)
+            check(code == 200 && decode(NutritionReply.self, body) != nil, "nutrition reply decodes")
+
+            // Local food catalogue (LocalFood.Catalog): synthesized Decodable needs every non-optional key.
+            struct Catalog: Decodable { let country: String; let name: String; let cuisine: String; let staples: [String]; let cravings: [String]; let dishes: [RecipeDraft] }
+            struct Country: Encodable { let country: String }
+            (code, body) = try await post("v1/discover", Country(country: "IN"), token: token)
+            if let catalog = decode(Catalog.self, body) {
+                check(code == 200 && catalog.country == "IN" && !catalog.dishes.isEmpty, "discover → Catalog with \(catalog.dishes.count) dishes")
+                check(catalog.dishes.allSatisfy { passesAppValidation($0) }, "local dishes pass the app's validators")
+            } else { check(false, "discover decodes") }
+
+            // Premium video listening: a free device gets 403 + code "premium" (the app falls back to on-device).
+            var upload = URLRequest(url: base.appendingPathComponent("v1/ai/transcribe"))
+            upload.httpMethod = "POST"
+            upload.setValue("audio/m4a", forHTTPHeaderField: "Content-Type")
+            upload.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            upload.httpBody = Data(repeating: 7, count: 4_000)
+            let (uploadData, uploadResponse) = try await URLSession.shared.data(for: upload)
+            struct Coded: Decodable { let code: String? }
+            check((uploadResponse as? HTTPURLResponse)?.statusCode == 403 && decode(Coded.self, uploadData)?.code == "premium",
+                  "transcribe is Premium-only (403 → app falls back to on-device listening)")
 
             (code, body) = try await post("v1/devices/erase", Empty(), token: token)
             check(code == 200 && decode(Empty.self, body) != nil, "erase answers {}")

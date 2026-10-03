@@ -145,17 +145,47 @@ final class ImportService: ObservableObject {
         return try await importText(lines.joined(separator: "\n"), kind: "ocr")
     }
 
+    /// A video the user picked: what's said (Premium: the whole video on our server; otherwise on device)
+    /// plus any recipe text shown on screen. Only the audio track is uploaded, never the video.
     func importVideo(_ url: URL) async throws -> RecipeDraft {
-        begin(detail: "Listening on your iPhone")
-        advance(.reading, "Transcribing the audio")
-        let transcript: String
+        let premium = SettingsManager.shared.isPremium
+        begin(detail: premium ? "Listening to the whole video" : "Listening on your iPhone")
+        advance(.reading, "Listening and reading on-screen text")
+        async let onScreen = VideoText.lines(in: url)
+        var spoken = "", trimmed = false
+        var spokenError: Error?
         do {
-            transcript = try await SpeechTranscriber.transcript(of: url)
+            (spoken, trimmed) = try await listen(to: url, premium: premium)
         } catch {
-            isRunning = false
-            throw Failure(title: "We couldn't hear a recipe", message: error.localizedDescription, partial: nil)
+            spokenError = error
         }
-        return try await importText(transcript, kind: "transcript")
+        let screen = await onScreen
+
+        var parts: [String] = []
+        if !spoken.isEmpty { parts.append("[What the cook says in the video]\n" + spoken) }
+        if screen.count >= 3 { parts.append("[Text shown on screen in the video]\n" + screen.joined(separator: "\n")) }
+        guard !parts.isEmpty else {
+            isRunning = false
+            throw Failure(title: "We couldn't hear a recipe",
+                          message: spokenError?.localizedDescription ?? "We couldn't hear a recipe in that video.", partial: nil)
+        }
+        var draft = try await importText(parts.joined(separator: "\n\n"), kind: "transcript")
+        if trimmed { draft.flags.append(ReviewFlag(field: "steps", message: "Long video: we listened to the first 20 minutes")) }
+        return draft
+    }
+
+    private func listen(to url: URL, premium: Bool) async throws -> (String, Bool) {
+        if premium {
+            struct Reply: Decodable { let text: String }
+            do {
+                let audio = try await SpeechTranscriber.audioForUpload(of: url)
+                let reply: Reply = try await APIClient.shared.upload(Apis.transcribe, data: audio.data, contentType: "audio/m4a")
+                return (reply.text, audio.trimmed)
+            } catch is APIError {
+                // Offline, daily cap or server trouble: fall back to listening on the iPhone.
+            }
+        }
+        return (try await SpeechTranscriber.transcript(of: url), false)
     }
 
     // MARK: - Share extension inbox

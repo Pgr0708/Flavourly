@@ -46,6 +46,7 @@ extension Recipe {
 
     /// Lines the safety rules read ("200 ml heavy cream").
     var checkLines: [String] { sortedIngredients.map(\.checkLine) }
+    var hasPhoto: Bool { imageURL != nil || imageData != nil || imageName != nil }
 
     var reviewFlags: [ReviewFlag] {
         guard let data = reviewNotes?.data(using: .utf8) else { return [] }

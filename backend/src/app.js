@@ -100,7 +100,10 @@ export function createApp({ config, db, cache, devices, premium, usage, importer
     rateLimit({ cache, name: 'transcribe', limit: config.TRANSCRIBE_PER_DAY, windowSeconds: 86_400, key: (req) => req.device.id, message: "You've listened to a lot of videos today. Try again tomorrow." }),
     express.raw({ type: ['audio/*', 'video/mp4'], limit: `${config.TRANSCRIBE_MAX_MB}mb` }),
     json((req) => importer.transcribe({ audio: req.body, mimeType: req.get('Content-Type') ?? '' })));
-  v1.post('/images/recipe', validate(schemas.image), metered('aiImage', (req) => images.recipePhoto(req.body)));
+  // Free-only lookups (filling in photos for saved recipes) cost nothing, so they aren't counted.
+  v1.post('/images/recipe', validate(schemas.image), (req, res, next) => (req.body.freeOnly
+    ? json((r) => images.recipePhoto(r.body))(req, res).catch(next)
+    : metered('aiImage', (r) => images.recipePhoto(r.body))(req, res).catch(next)));
 
   app.use('/v1', v1);
   app.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));

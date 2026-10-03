@@ -434,12 +434,15 @@ struct PlannerView: View {
         }
         guard !requests.isEmpty else { return [] }
         let candidates = facts.filter { used.contains($0.id) }.map { fact in
-            AIService.PlanCandidate(id: fact.id, title: fact.title, minutes: fact.minutes, slots: fact.slots.map(\.rawValue),
-                                    cuisine: fact.cuisine, protein: Int(fact.protein), reasons: [])
+            // Clamped to the server's ranges so one odd recipe can't fail the whole plan.
+            AIService.PlanCandidate(id: fact.id, title: String(fact.title.prefix(Validate.Limit.title)), minutes: min(max(fact.minutes, 0), 2880),
+                                    slots: fact.slots.map(\.rawValue), cuisine: fact.cuisine.map { String($0.prefix(Validate.Limit.cuisine)) },
+                                    protein: min(max(Int(fact.protein), 0), 500), reasons: [])
         }
         var preferences = Array(styles).sorted() + (settings.customizationPreferences.choices["goals"] ?? [])
         if highProtein { preferences.append("High protein") }
         preferences.append("Vary cuisines and main ingredients across the week")
+        preferences = preferences.prefix(30).map { String($0.prefix(80)) }
         let choices = try await AIService.plan(.init(slots: requests, candidates: candidates, preferences: preferences, rules: .current()))
 
         var picks: [PlanPick] = []

@@ -236,18 +236,30 @@ describe('free limits and Premium', () => {
 });
 
 describe('images', () => {
+  it('free-only lookups never use GPT and never use up the free plan', async () => {
+    const token = await t.register();
+    const gptCalls = t.ai.calls.filter((c) => c.path.includes('images')).length;
+    for (let i = 0; i < 4; i += 1) {
+      const res = await t.api('/v1/images/recipe', { title: 'Aunt Meera special stew', freeOnly: true }, { token });
+      assert.equal(res.status, 404);
+      assert.equal(res.body.code, 'no_photo');
+    }
+    assert.equal(t.ai.calls.filter((c) => c.path.includes('images')).length, gptCalls);
+    const usage = await t.api('/v1/usage', {}, { token });
+    assert.equal(usage.body.features.aiImage.used, 0);
+  });
   it('creates a photo once and reuses the file', async () => {
     const token = await t.register();
     const first = await t.api('/v1/images/recipe', { title: 'Paneer tikka', description: 'smoky' }, { token });
     assert.equal(first.status, 200);
-    assert.match(first.body.url, /^https:\/\/flavourly\.example\.com\/images\/[0-9a-f]{32}\.jpg$/);
-    const file = path.join(t.config.IMAGE_DIR, path.basename(first.body.url));
+    assert.match(first.body.url, /^https:\/\/flavourly\.example\.com\/images\/[0-9a-f]{32}\.jpg#credit=AI-generated%20image$/);
+    const file = path.join(t.config.IMAGE_DIR, path.basename(new URL(first.body.url).pathname));
     assert.ok((await fs.stat(file)).size > 0);
     const calls = t.ai.calls.filter((c) => c.path.includes('images')).length;
     const again = await t.api('/v1/images/recipe', { title: 'PANEER TIKKA' }, { token });
     assert.equal(again.body.url, first.body.url);
     assert.equal(t.ai.calls.filter((c) => c.path.includes('images')).length, calls);
-    const served = await fetch(`${t.base}/images/${path.basename(first.body.url)}`);
+    const served = await fetch(`${t.base}/images/${path.basename(new URL(first.body.url).pathname)}`);
     assert.equal(served.status, 200);
     assert.match(served.headers.get('cache-control'), /max-age=2592000/);
     assert.equal((await fetch(`${t.base}/images/..%2f..%2fpackage.json`)).status, 404, 'no path traversal');
@@ -278,7 +290,7 @@ describe('local food (discover)', () => {
     const calls = chats();
     await waitFor(async () => (await t.api('/v1/discover', { country: 'IN' }, { token })).body.dishes.every((d) => d.imageURL), 10_000);
     const res = await t.api('/v1/discover', { country: 'IN' }, { token });
-    assert.ok(res.body.dishes.every((d) => /^https:\/\/flavourly\.example\.com\/images\/[0-9a-f]{32}\.jpg$/.test(d.imageURL)));
+    assert.ok(res.body.dishes.every((d) => /^https:\/\/flavourly\.example\.com\/images\/[0-9a-f]{32}\.jpg#credit=AI-generated%20image$/.test(d.imageURL)));
     assert.equal(chats(), calls, 'no new AI text calls');
     const other = await t.register();
     assert.equal((await t.api('/v1/discover', { country: 'IN' }, { token: other })).status, 200);

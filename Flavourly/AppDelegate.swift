@@ -30,15 +30,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
         
+        // The FCM token arrives in messaging(_:didReceiveRegistrationToken:) once APNs has a token —
+        // asking for it here, before APNs, always fails with error 505.
+        Messaging.messaging().delegate = self
         application.registerForRemoteNotifications()
-
-        Messaging.messaging().token { token, error in
-            if let error {
-                print("Error fetching FCM registration token: \(error)")
-            } else if let token {
-                print("FCM registration token: \(token)")
-            }
-        }
         
         return true
     }
@@ -53,6 +48,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             readableToken += String(format: "%02.2hhx", deviceToken[index] as CVarArg)
         }
         print("Received an APNs device token: \(readableToken)")
+        Messaging.messaging().apnsToken = deviceToken
     }
 }
 

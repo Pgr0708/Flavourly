@@ -22,6 +22,15 @@ enum HomeMoment {
         }
     }
 
+    /// Where the cook's face is across the art (0 = left edge, 1 = right). The header keeps it in view.
+    var focusX: Double {
+        switch self {
+        case .morning: 0.74
+        case .afternoon: 0.73
+        case .night: 0.77
+        }
+    }
+
     var imageName: String {
         switch self {
         case .morning: "HomeMorning"
